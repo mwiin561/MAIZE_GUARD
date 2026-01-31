@@ -6,6 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import DiagnosisScreen from './src/screens/DiagnosisScreen';
+import AnalyticsScreen from './src/screens/AnalyticsScreen';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -54,7 +56,11 @@ const AppNav = () => {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {userToken ? (
-            <Stack.Screen name="Home" component={HomeScreen} />
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Diagnosis" component={DiagnosisScreen} />
+              <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+            </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
           )}
