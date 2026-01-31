@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 
@@ -7,14 +7,26 @@ const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
-  const { login, isLoading } = useContext(AuthContext);
+  const { login, signup, googleLogin, isLoading } = useContext(AuthContext);
 
-  const handleAuth = () => {
-    if (email && password) {
-      login(email, password);
-    } else {
-      alert('Please enter email and password');
+  const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
     }
+
+    if (isLogin) {
+      await login(email, password);
+    } else {
+      const success = await signup(email, password);
+      if (success) {
+        Alert.alert('Success', 'Account created successfully!');
+      }
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    googleLogin();
   };
 
   return (
@@ -51,12 +63,26 @@ const LoginScreen = () => {
             secureTextEntry
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleAuth}>
+          <TouchableOpacity style={styles.button} onPress={handleAuth} disabled={isLoading}>
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>{isLogin ? 'Sign In' : 'Sign Up'}</Text>
             )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} disabled={isLoading}>
+             {/* Mock Google Icon (G) */}
+             <View style={styles.googleIconContainer}>
+               <Text style={styles.googleIconText}>G</Text>
+             </View>
+             <Text style={styles.googleButtonText}>Sign in with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggleButton}>
@@ -131,6 +157,44 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#dadce0',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#5f6368',
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  googleIconContainer: {
+    marginRight: 12,
+  },
+  googleIconText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#DB4437', // Google Red
+  },
+  googleButtonText: {
+    color: '#3c4043',
+    fontSize: 16,
+    fontWeight: '500',
   },
   toggleButton: {
     marginTop: 24,
