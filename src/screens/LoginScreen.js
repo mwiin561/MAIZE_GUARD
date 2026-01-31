@@ -36,11 +36,11 @@ const LoginScreen = () => {
         style={styles.content}
       >
         <View style={styles.header}>
-          {/* Placeholder for Logo - using a simple View for now or Text */}
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>M</Text>
-          </View>
-          <Text style={styles.title}>Maize Guard</Text>
+          <Image 
+            source={require('../../assets/icon.png')} 
+            style={styles.logo} 
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>
             {isLogin ? 'Sign in to continue' : 'Create an account'}
           </Text>
@@ -110,24 +110,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#4CAF50', // Maize Green
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logo: {
+    width: 150,
+    height: 150,
     marginBottom: 16,
-  },
-  logoText: {
-    fontSize: 40,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#202124', // Google Dark Gray
   },
   subtitle: {
     fontSize: 16,

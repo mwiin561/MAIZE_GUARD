@@ -57,8 +57,12 @@ const HomeScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
-             <Text style={styles.title}>Maize Guard</Text>
+        <View style={styles.headerLeft}>
+             <Image 
+                source={require('../../assets/icon.png')} 
+                style={styles.headerLogo} 
+                resizeMode="contain" 
+             />
              <Text style={styles.welcome}>Welcome, {userInfo?.email?.split('@')[0]}</Text>
         </View>
         <View style={{flexDirection: 'row'}}>
@@ -110,17 +114,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
+    borderBottomColor: '#dadce0',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#202124',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
   },
   welcome: {
-      fontSize: 14,
-      color: '#5f6368',
+    fontSize: 16,
+    color: '#5f6368',
   },
   iconButton: {
     padding: 8,
