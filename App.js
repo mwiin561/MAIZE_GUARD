@@ -4,9 +4,15 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
+
+// Screens
 import LoginScreen from './src/screens/LoginScreen';
-import HomeScreen from './src/screens/HomeScreen';
+import MainTabNavigator from './src/navigation/MainTabNavigator';
 import DiagnosisScreen from './src/screens/DiagnosisScreen';
+import DiagnosisResultScreen from './src/screens/DiagnosisResultScreen';
+import ManagementAdviceScreen from './src/screens/ManagementAdviceScreen';
+import FarmProfileScreen from './src/screens/FarmProfileScreen';
+import OfflineDatabaseScreen from './src/screens/OfflineDatabaseScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 
 // Keep the splash screen visible while we fetch resources
@@ -40,7 +46,6 @@ const AppNav = () => {
   }, [appIsReady, isLoading]);
 
   if (!appIsReady || isLoading) {
-    // For web, we show a loader because standard splash screen might not hold
     if (Platform.OS === 'web') {
       return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
@@ -57,8 +62,12 @@ const AppNav = () => {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {userToken ? (
             <>
-              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="MainTabs" component={MainTabNavigator} />
               <Stack.Screen name="Diagnosis" component={DiagnosisScreen} />
+              <Stack.Screen name="DiagnosisResult" component={DiagnosisResultScreen} />
+              <Stack.Screen name="ManagementAdvice" component={ManagementAdviceScreen} />
+              <Stack.Screen name="FarmProfile" component={FarmProfileScreen} />
+              <Stack.Screen name="OfflineDatabase" component={OfflineDatabaseScreen} />
               <Stack.Screen name="Analytics" component={AnalyticsScreen} />
             </>
           ) : (

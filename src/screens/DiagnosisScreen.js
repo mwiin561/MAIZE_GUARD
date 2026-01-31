@@ -62,10 +62,10 @@ const DiagnosisScreen = ({ navigation }) => {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         image: image,
-        diagnosis: isInfected ? 'Maize Streak Virus Detected' : 'Healthy Maize Leaf',
-        confidence: confidence,
+        diagnosis: isInfected ? (Math.random() > 0.5 ? 'Maize Streak Virus (MSV)' : 'Gray Leaf Spot') : 'Healthy',
+        confidence: parseFloat(confidence),
         details: isInfected 
-          ? 'Visible streaks and discoloration consistent with Maize Streak Virus.' 
+          ? 'Visible streaks and discoloration consistent with viral infection.' 
           : 'No visible signs of infection. Plant appears healthy.'
       };
 
@@ -74,6 +74,10 @@ const DiagnosisScreen = ({ navigation }) => {
       
       // Save to history
       await saveToHistory(diagnosisResult);
+      
+      // Navigate to Result Screen
+      navigation.navigate('DiagnosisResult', { result: diagnosisResult });
+      // Optional: Reset local state if needed, but keeping image might be nice if they go back
     }, 2000);
   };
 
@@ -93,28 +97,9 @@ const DiagnosisScreen = ({ navigation }) => {
     setResult(null);
   };
 
-  if (result) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.resultScroll}>
-            <Image source={{ uri: image }} style={styles.resultImage} />
-            <View style={styles.resultCard}>
-                <Text style={[styles.resultTitle, { color: result.diagnosis.includes('Virus') ? '#d32f2f' : '#388e3c' }]}>
-                    {result.diagnosis}
-                </Text>
-                <Text style={styles.confidence}>Confidence: {(result.confidence * 100).toFixed(0)}%</Text>
-                <Text style={styles.details}>{result.details}</Text>
-            </View>
-            <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Home')}>
-                <Text style={styles.buttonText}>Back to Dashboard</Text>
-            </TouchableOpacity>
-             <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={reset}>
-                <Text style={[styles.buttonText, styles.secondaryText]}>New Diagnosis</Text>
-            </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+  // If result is present, we have already navigated away. 
+  // We can keep the camera view active or show the captured image with a "Retake" button.
+  // For now, let's just show the image preview with the "Analyze" button state.
 
   return (
     <SafeAreaView style={styles.container}>
