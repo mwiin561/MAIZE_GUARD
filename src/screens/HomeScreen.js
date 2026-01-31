@@ -1,10 +1,12 @@
 import React, { useContext, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { MaterialIcons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+
+const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const { userInfo } = useContext(AuthContext);
@@ -16,12 +18,16 @@ const HomeScreen = ({ navigation }) => {
     try {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (stored) {
-        const parsedHistory = JSON.parse(stored);
-        setHistory(parsedHistory);
+        const data = JSON.parse(stored);
+        setHistory(data);
         
         // Calculate stats
-        const total = parsedHistory.length;
-        const issues = parsedHistory.filter(item => item.diagnosis.includes('Virus') || item.diagnosis.includes('Spot')).length;
+        const total = data.length;
+        const issues = data.filter(item => 
+          item.diagnosis.toLowerCase().includes('virus') || 
+          item.diagnosis.toLowerCase().includes('spot')
+        ).length;
+        
         setStats({ total, issues });
       }
     } catch (e) {
@@ -41,83 +47,80 @@ const HomeScreen = ({ navigation }) => {
   }, []);
 
   const renderRecentItem = ({ item }) => {
-    const isHealthy = item.diagnosis === 'Healthy';
+    const isIssue = item.diagnosis.toLowerCase().includes('virus') || item.diagnosis.toLowerCase().includes('spot');
     return (
-      <TouchableOpacity 
-        style={styles.recentItem}
-        onPress={() => navigation.navigate('DiagnosisResult', { result: item })}
-      >
+      <TouchableOpacity style={styles.recentItem}>
         <Image source={{ uri: item.image }} style={styles.recentImage} />
         <View style={styles.recentInfo}>
           <Text style={styles.recentTitle}>{item.diagnosis}</Text>
-          <Text style={styles.recentDate}>{new Date(item.date).toLocaleString()}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: isHealthy ? '#e6f4ea' : '#fce8e6' }]}>
-            <Text style={[styles.statusText, { color: isHealthy ? '#1e8e3e' : '#c5221f' }]}>
-              {isHealthy ? 'Optimal' : 'Action Required'}
-            </Text>
-          </View>
+          <Text style={styles.recentDate}>{new Date(item.date).toLocaleDateString()}</Text>
         </View>
-        <MaterialIcons name="chevron-right" size={24} color="#dadce0" />
+        <View style={[styles.statusBadge, { backgroundColor: isIssue ? '#ffebee' : '#e8f5e9' }]}>
+            <Text style={[styles.statusText, { color: isIssue ? '#c62828' : '#2e7d32' }]}>
+                {isIssue ? 'Action Req' : 'Optimal'}
+            </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#ccc" />
       </TouchableOpacity>
     );
   };
 
-  const HeaderComponent = () => (
+  const ListHeader = () => (
     <View>
       {/* Hero Section */}
-      <View style={styles.heroCard}>
-        <Image 
-          source={require('../../assets/adaptive-icon.png')} 
-          style={styles.heroBackground}
-          blurRadius={10} 
-        />
-        <View style={styles.heroOverlay} />
+      <View style={styles.heroContainer}>
+        <View style={styles.heroBackground}>
+             {/* Using a color placeholder or local image if available. 
+                 Ideally this would be a real image of a corn field */}
+             <View style={styles.heroOverlay} />
+        </View>
         <View style={styles.heroContent}>
-          <Text style={styles.heroTitle}>Instant Diagnosis</Text>
-          <Text style={styles.heroSubtitle}>Keep your crops healthy and productive</Text>
+            <Text style={styles.heroTitle}>Instant Diagnosis</Text>
+            <Text style={styles.heroSubtitle}>Keep your crops healthy and productive</Text>
         </View>
       </View>
 
-      {/* Quick Scan */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Scan</Text>
-        <View style={styles.quickScanCard}>
-          <Text style={styles.quickScanText}>Identify pests & diseases instantly</Text>
-          <TouchableOpacity 
-            style={styles.startScanButton}
-            onPress={() => navigation.navigate('Diagnosis')}
-          >
-            <Text style={styles.startScanButtonText}>Start Scan</Text>
-          </TouchableOpacity>
+      {/* Quick Scan Card */}
+      <View style={styles.quickScanCard}>
+        <View>
+            <Text style={styles.quickScanTitle}>Quick Scan</Text>
+            <Text style={styles.quickScanSubtitle}>Identify pests & diseases instantly</Text>
         </View>
+        <TouchableOpacity 
+            style={styles.scanButton}
+            onPress={() => navigation.navigate('Diagnosis')}
+        >
+            <Text style={styles.scanButtonText}>Start Scanning</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Stats Row */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#e6f4ea' }]}>
-             <MaterialIcons name="eco" size={24} color="#1e8e3e" />
-          </View>
-          <View>
-            <Text style={styles.statLabel}>Total Scans</Text>
-            <Text style={styles.statValue}>{stats.total}</Text>
-          </View>
+            <View style={[styles.statIconContainer, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="scan" size={24} color="#2e7d32" />
+            </View>
+            <View>
+                <Text style={styles.statLabel}>Total Scans</Text>
+                <Text style={styles.statValue}>{stats.total}</Text>
+            </View>
         </View>
         <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#fff7e0' }]}>
-             <MaterialIcons name="warning" size={24} color="#f9ab00" />
-          </View>
-          <View>
-            <Text style={styles.statLabel}>Issues Found</Text>
-            <Text style={styles.statValue}>{stats.issues}</Text>
-          </View>
+            <View style={[styles.statIconContainer, { backgroundColor: '#fff3e0' }]}>
+                <Ionicons name="warning-outline" size={24} color="#f57c00" />
+            </View>
+            <View>
+                <Text style={styles.statLabel}>Issues Found</Text>
+                <Text style={styles.statValue}>{stats.issues}</Text>
+            </View>
         </View>
       </View>
 
+      {/* Recent Scans Header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent Scans</Text>
         <TouchableOpacity onPress={() => navigation.navigate('History')}>
-          <Text style={styles.viewAllText}>View All</Text>
+            <Text style={styles.viewAllText}>View All</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -125,14 +128,14 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Custom Header */}
-      <View style={styles.header}>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
         <TouchableOpacity>
-           <MaterialIcons name="menu" size={24} color="#202124" />
+            <Ionicons name="menu" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>MaizeHealth</Text>
+        <Text style={styles.appName}>MaizeHealth</Text>
         <TouchableOpacity>
-           <MaterialIcons name="account-circle" size={24} color="#202124" />
+            <Ionicons name="person-circle-outline" size={32} color="#333" />
         </TouchableOpacity>
       </View>
 
@@ -140,15 +143,24 @@ const HomeScreen = ({ navigation }) => {
         data={history.slice(0, 5)} // Show only recent 5
         renderItem={renderRecentItem}
         keyExtractor={item => item.id}
-        ListHeaderComponent={HeaderComponent}
+        ListHeaderComponent={ListHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-            <View style={styles.emptyState}>
+            <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No recent scans.</Text>
             </View>
         }
       />
+      
+      {/* Floating Action Button for quick access */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => navigation.navigate('Diagnosis')}
+      >
+        <Ionicons name="camera" size={28} color="#fff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -158,113 +170,110 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
   },
-  headerTitle: {
-    fontSize: 18,
+  appName: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#202124',
+    color: '#333',
   },
   listContent: {
-    padding: 16,
+    paddingBottom: 80,
   },
-  heroCard: {
-    height: 180,
+  heroContainer: {
+    height: 200,
+    margin: 16,
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 24,
-    backgroundColor: '#2d5a27', // Fallback color
-    justifyContent: 'flex-end',
+    backgroundColor: '#2e7d32', // Fallback color
     position: 'relative',
   },
   heroBackground: {
     ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-    opacity: 0.6,
+    backgroundColor: '#1b5e20', // Darker green for contrast
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   heroContent: {
-    padding: 20,
+    padding: 24,
+    justifyContent: 'center',
+    height: '100%',
   },
   heroTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
     color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   heroSubtitle: {
-    fontSize: 14,
-    color: '#e8eaed',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#202124',
-    marginBottom: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
   },
   quickScanCard: {
     backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  quickScanText: {
-    fontSize: 16,
-    color: '#5f6368',
-    marginBottom: 16,
-  },
-  startScanButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
-    borderRadius: 24,
+    marginHorizontal: 16,
+    marginTop: -40, // Overlap
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  startScanButtonText: {
+  quickScanTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  quickScanSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    maxWidth: 150,
+  },
+  scanButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  scanButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
   },
   statsRow: {
     flexDirection: 'row',
+    padding: 16,
     justifyContent: 'space-between',
-    marginBottom: 24,
   },
   statCard: {
     flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 12,
     marginHorizontal: 4,
-    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  statIcon: {
+  statIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -274,29 +283,47 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
-    color: '#5f6368',
+    color: '#666',
   },
   statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#202124',
+    color: '#333',
   },
   viewAllText: {
     color: '#4CAF50',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
     padding: 12,
     borderRadius: 12,
-    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 1,
   },
   recentImage: {
-    width: 50,
-    height: 50,
+    width: 48,
+    height: 48,
     borderRadius: 8,
     marginRight: 12,
   },
@@ -305,32 +332,48 @@ const styles = StyleSheet.create({
   },
   recentTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#202124',
-    marginBottom: 4,
+    fontWeight: '600',
+    color: '#333',
   },
   recentDate: {
     fontSize: 12,
-    color: '#5f6368',
-    marginBottom: 4,
+    color: '#888',
+    marginTop: 2,
   },
   statusBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 12,
+    marginRight: 8,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
-  emptyState: {
+  emptyContainer: {
     padding: 20,
     alignItems: 'center',
   },
   emptyText: {
-    color: '#5f6368',
+    color: '#999',
+    fontStyle: 'italic',
   },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#4CAF50',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  }
 });
 
 export default HomeScreen;

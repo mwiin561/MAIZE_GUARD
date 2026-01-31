@@ -1,10 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const GuideScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.text}>Maize Disease Library</Text>
+      <Text style={styles.title}>Maize Disease Library</Text>
+      <View style={styles.content}>
+        <Text style={styles.text}>Library content coming soon...</Text>
+      </View>
     </SafeAreaView>
   );
 };
@@ -12,14 +16,19 @@ const GuideScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
   },
   text: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+    fontSize: 16,
+    color: '#666',
+  }
 });
 
 export default GuideScreen;

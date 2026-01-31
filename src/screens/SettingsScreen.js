@@ -1,49 +1,62 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
-import { useContext } from 'react';
+import React, { useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
-import { MaterialIcons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-const SettingsScreen = ({ navigation }) => {
-  const { logout } = useContext(AuthContext);
+const SettingsScreen = () => {
+  const { logout, userInfo } = useContext(AuthContext);
 
-  const SettingItem = ({ icon, title, onPress }) => (
-    <TouchableOpacity style={styles.item} onPress={onPress}>
-      <View style={styles.itemLeft}>
-        <MaterialIcons name={icon} size={24} color="#5f6368" />
-        <Text style={styles.itemText}>{title}</Text>
+  const SettingItem = ({ icon, title, subtitle, hasSwitch }) => (
+    <TouchableOpacity style={styles.item} onPress={title === 'Log Out' ? logout : null}>
+      <View style={styles.iconContainer}>
+        <Ionicons name={icon} size={24} color="#555" />
       </View>
-      <MaterialIcons name="chevron-right" size={24} color="#dadce0" />
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle}>{title}</Text>
+        {subtitle && <Text style={styles.itemSubtitle}>{subtitle}</Text>}
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-      </View>
+      <Text style={styles.headerTitle}>Settings</Text>
       
-      <View style={styles.section}>
-        <SettingItem 
-            icon="person" 
-            title="Profile & Farm Details" 
-            onPress={() => navigation.navigate('FarmProfile')}
-        />
-        <SettingItem 
-            icon="cloud-off" 
-            title="Offline Database" 
-            onPress={() => navigation.navigate('OfflineDatabase')}
-        />
-        <SettingItem 
-            icon="file-download" 
-            title="Export Data (CSV)" 
-            onPress={() => {}}
-        />
-      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.card}>
+                <View style={styles.userRow}>
+                    <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{userInfo?.email?.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View>
+                        <Text style={styles.userName}>{userInfo?.email?.split('@')[0]}</Text>
+                        <Text style={styles.userEmail}>{userInfo?.email}</Text>
+                    </View>
+                </View>
+            </View>
+        </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-        <Text style={styles.logoutText}>Log Out</Text>
-      </TouchableOpacity>
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>General</Text>
+            <View style={styles.card}>
+                <SettingItem icon="download-outline" title="Offline Database" subtitle="Last synced: 2 hours ago" />
+                <SettingItem icon="map-outline" title="Offline Maps" />
+                <SettingItem icon="document-text-outline" title="Export Scan History" />
+            </View>
+        </View>
+
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>App</Text>
+            <View style={styles.card}>
+                <SettingItem icon="help-circle-outline" title="Help & Feedback" />
+                <SettingItem icon="log-out-outline" title="Log Out" />
+            </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -51,57 +64,86 @@ const SettingsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
+    backgroundColor: '#f5f5f5',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#202124',
+    padding: 16,
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  scrollContent: {
+    padding: 16,
   },
   section: {
-    marginTop: 16,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+  },
+  card: {
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#f1f3f4',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   item: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
+    borderBottomColor: '#f0f0f0',
   },
-  itemLeft: {
+  iconContainer: {
+    width: 32,
+    marginRight: 12,
+    alignItems: 'center',
+  },
+  itemContent: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 16,
+    color: '#333',
+  },
+  itemSubtitle: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  itemText: {
-    marginLeft: 16,
-    fontSize: 16,
-    color: '#202124',
-  },
-  logoutButton: {
-    margin: 16,
     padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 8,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#dadce0',
+    marginRight: 16,
   },
-  logoutText: {
-    color: '#d93025',
-    fontSize: 16,
-    fontWeight: '500',
+  avatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+  }
 });
 
 export default SettingsScreen;
