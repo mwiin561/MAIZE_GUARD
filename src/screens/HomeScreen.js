@@ -294,9 +294,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f5f5f5',
     marginHorizontal: 0,
-  },position: 'relative',
-    // Make it span full width if desired, or keep margins. 
-    // The image implies a full card or banner look.
   },
   heroBackground: {
     ...StyleSheet.absoluteFillObject,

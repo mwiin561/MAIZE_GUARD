@@ -72,7 +72,14 @@ const MainDrawer = () => {
       })}
     >
       <Drawer.Screen name="HomeDrawer" component={HomeScreen} options={{ title: 'Home' }} />
-      <Drawer.Screen name="Guide" component={GuideScreen} options={{ title: 'Guide' }} />
+      <Drawer.Screen 
+        name="Guide" 
+        component={GuideScreen} 
+        options={{ 
+          title: 'Guide',
+          headerShown: false 
+        }} 
+      />
       <Drawer.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Drawer.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Feedback' }} />
     </Drawer.Navigator>
