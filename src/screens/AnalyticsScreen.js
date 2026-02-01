@@ -31,6 +31,7 @@ const AnalyticsScreen = ({ navigation }) => {
                 color: '#c5221f',
                 legendFontColor: '#7F7F7F',
                 legendFontSize: 15,
+                legendFontFamily: 'Roboto_400Regular',
             },
             {
                 name: 'Healthy',
@@ -38,6 +39,7 @@ const AnalyticsScreen = ({ navigation }) => {
                 color: '#1e8e3e',
                 legendFontColor: '#7F7F7F',
                 legendFontSize: 15,
+                legendFontFamily: 'Roboto_400Regular',
             },
             ];
             setData(chartData);
@@ -90,7 +92,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     marginBottom: 20,
     color: '#202124',
   },
@@ -101,11 +103,13 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 18,
     color: '#5f6368',
+    fontFamily: 'Roboto_400Regular',
   },
   noData: {
     fontSize: 16,
     color: '#5f6368',
     marginTop: 40,
+    fontFamily: 'Roboto_400Regular',
   },
 });
 

@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     padding: 16,
     color: '#333',
     backgroundColor: '#fff',
@@ -99,13 +99,14 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
     color: '#333',
   },
   cardDate: {
     fontSize: 12,
     color: '#757575',
     marginTop: 4,
+    fontFamily: 'Roboto_400Regular',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
   },
   emptyContainer: {
       alignItems: 'center',
@@ -123,6 +124,7 @@ const styles = StyleSheet.create({
   emptyText: {
       color: '#888',
       fontSize: 16,
+      fontFamily: 'Roboto_400Regular',
   }
 });
 

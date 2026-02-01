@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     padding: 16,
     color: '#333',
     backgroundColor: '#fff',
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
     color: '#666',
     marginBottom: 8,
     marginLeft: 4,
@@ -110,11 +110,13 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     color: '#333',
+    fontFamily: 'Roboto_400Regular',
   },
   itemSubtitle: {
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+    fontFamily: 'Roboto_400Regular',
   },
   userRow: {
     flexDirection: 'row',
@@ -133,16 +135,17 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
   },
   userName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     color: '#333',
   },
   userEmail: {
     fontSize: 14,
     color: '#666',
+    fontFamily: 'Roboto_400Regular',
   }
 });
 

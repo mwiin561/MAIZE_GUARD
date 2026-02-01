@@ -22,12 +22,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     marginBottom: 20,
   },
   text: {
     fontSize: 16,
     color: '#666',
+    fontFamily: 'Roboto_400Regular',
   }
 });
 

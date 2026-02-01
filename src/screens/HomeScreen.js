@@ -1,5 +1,5 @@
 import React, { useContext, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, TouchableWithoutFeedback } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,11 +8,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 const { width } = Dimensions.get('window');
 
+import { LinearGradient } from 'expo-linear-gradient';
+
 const HomeScreen = ({ navigation }) => {
-  const { userInfo } = useContext(AuthContext);
+  const { userInfo, logout } = useContext(AuthContext);
   const [history, setHistory] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({ total: 0, issues: 0 });
+  const [profileMenuVisible, setProfileMenuVisible] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -69,13 +72,22 @@ const HomeScreen = ({ navigation }) => {
     <View>
       {/* Hero Section */}
       <View style={styles.heroContainer}>
-        <View style={styles.heroBackground}>
-             {/* Using a color placeholder or local image if available. 
-                 Ideally this would be a real image of a corn field */}
-             <View style={styles.heroOverlay} />
-        </View>
+        <LinearGradient
+          colors={['#1b5e20', '#2e7d32', '#43a047']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroBackground}
+        >
+            {/* Overlay Leaf Accents - simulated with absolute positioned views or icons for now since we don't have assets */}
+            <View style={styles.leafAccentRight} />
+            <View style={styles.leafAccentLeft} />
+        </LinearGradient>
         <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>Instant Diagnosis</Text>
+            <View style={styles.brandHeader}>
+                <Ionicons name="leaf" size={16} color="#fff" />
+                <Text style={styles.brandText}>MAIZE GUARD</Text>
+            </View>
+            <Text style={styles.heroTitle}>Instant{'\n'}Diagnosis</Text>
             <Text style={styles.heroSubtitle}>Keep your crops healthy and productive</Text>
         </View>
       </View>
@@ -130,14 +142,57 @@ const HomeScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.openDrawer()}>
             <Ionicons name="menu" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.appName}>MaizeHealth</Text>
-        <TouchableOpacity>
-            <Ionicons name="person-circle-outline" size={32} color="#333" />
+        
+        <Text style={styles.headerTitle}>MaizeHealth</Text>
+
+        <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => setProfileMenuVisible(true)}
+        >
+            <Ionicons name="person-outline" size={24} color="#2e7d32" />
         </TouchableOpacity>
       </View>
+
+      {/* Profile Popup Menu */}
+      <Modal
+        visible={profileMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setProfileMenuVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setProfileMenuVisible(false)}>
+            <View style={styles.modalOverlay}>
+                <View style={styles.menuContainer}>
+                    <TouchableOpacity 
+                        style={styles.menuItem} 
+                        onPress={() => {
+                            setProfileMenuVisible(false);
+                            navigation.navigate('Account');
+                        }}
+                    >
+                        <Ionicons name="person-circle-outline" size={22} color="#555" />
+                        <Text style={styles.menuItemText}>Account & Farm Info</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.menuDivider} />
+                    
+                    <TouchableOpacity 
+                        style={styles.menuItem} 
+                        onPress={() => {
+                            setProfileMenuVisible(false);
+                            logout();
+                        }}
+                    >
+                        <Ionicons name="log-out-outline" size={22} color="#d32f2f" />
+                        <Text style={[styles.menuItemText, { color: '#d32f2f' }]}>Log Out</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <FlatList
         data={history.slice(0, 5)} // Show only recent 5
@@ -174,48 +229,136 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
+    elevation: 2, // Slight shadow for the top bar itself
+    zIndex: 10,
   },
-  appName: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Roboto_700Bold',
+    color: '#000',
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e8f5e9', // Light green background
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
     paddingBottom: 80,
   },
   heroContainer: {
-    height: 200,
+    height: 280,
     margin: 16,
-    borderRadius: 16,
+    borderRadius: 0,
     overflow: 'hidden',
-    backgroundColor: '#2e7d32', // Fallback color
-    position: 'relative',
+    backgroundColor: '#1b5e20',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  menuContainer: {
+    position: 'absolute',
+    top: 70, // Below the header
+    right: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    width: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontFamily: 'Roboto_500Medium',
+    fontSize: 16,
+    color: '#444',
+    marginLeft: 16,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#f5f5f5',
+    marginHorizontal: 0,
+  },position: 'relative',
+    // Make it span full width if desired, or keep margins. 
+    // The image implies a full card or banner look.
   },
   heroBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1b5e20', // Darker green for contrast
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   heroContent: {
     padding: 24,
     justifyContent: 'center',
     height: '100%',
+    zIndex: 10,
+  },
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 20,
+    left: 24,
+  },
+  brandText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Roboto_500Medium',
+    marginLeft: 6,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   heroTitle: {
     color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 48,
+    fontFamily: 'Roboto_700Bold',
+    lineHeight: 52,
+    marginBottom: 16,
+    marginTop: 20,
   },
   heroSubtitle: {
-    color: 'rgba(255,255,255,0.9)',
+    color: '#fff',
     fontSize: 16,
+    fontFamily: 'Roboto_700Bold',
+    opacity: 0.9,
+  },
+  // Simulated organic shapes for "leaves" if no image
+  leafAccentRight: {
+    position: 'absolute',
+    bottom: -50,
+    right: -20,
+    width: 200,
+    height: 200,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderTopLeftRadius: 200,
+    borderBottomLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    transform: [{ rotate: '-10deg' }],
+  },
+  leafAccentLeft: {
+    position: 'absolute',
+    bottom: -80,
+    left: -40,
+    width: 180,
+    height: 180,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopRightRadius: 180,
+    transform: [{ rotate: '20deg' }],
   },
   quickScanCard: {
     backgroundColor: '#fff',
@@ -234,7 +377,7 @@ const styles = StyleSheet.create({
   },
   quickScanTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     color: '#333',
   },
   quickScanSubtitle: {
@@ -242,6 +385,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
     maxWidth: 150,
+    fontFamily: 'Roboto_400Regular',
   },
   scanButton: {
     backgroundColor: '#4CAF50',
@@ -251,7 +395,7 @@ const styles = StyleSheet.create({
   },
   scanButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     fontSize: 14,
   },
   statsRow: {
@@ -284,10 +428,11 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#666',
+    fontFamily: 'Roboto_400Regular',
   },
   statValue: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     color: '#333',
   },
   sectionHeader: {
@@ -300,12 +445,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     color: '#333',
   },
   viewAllText: {
     color: '#4CAF50',
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
   },
   recentItem: {
     flexDirection: 'row',
@@ -332,13 +477,14 @@ const styles = StyleSheet.create({
   },
   recentTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
     color: '#333',
   },
   recentDate: {
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+    fontFamily: 'Roboto_400Regular',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -348,7 +494,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
   },
   emptyContainer: {
     padding: 20,
@@ -357,6 +503,7 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#999',
     fontStyle: 'italic',
+    fontFamily: 'Roboto_400Regular',
   },
   fab: {
     position: 'absolute',

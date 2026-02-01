@@ -119,6 +119,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#5f6368', // Google Gray
     marginTop: 8,
+    fontFamily: 'Roboto_400Regular',
   },
   form: {
     width: '100%',
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 16,
     color: '#202124',
+    fontFamily: 'Roboto_400Regular',
   },
   button: {
     backgroundColor: '#1a73e8', // Google Blue
@@ -142,7 +144,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -158,6 +160,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: '#5f6368',
     fontSize: 14,
+    fontFamily: 'Roboto_400Regular',
   },
   googleButton: {
     flexDirection: 'row',
@@ -174,13 +177,13 @@ const styles = StyleSheet.create({
   },
   googleIconText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Roboto_700Bold',
     color: '#DB4437', // Google Red
   },
   googleButtonText: {
     color: '#3c4043',
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Roboto_500Medium',
   },
   toggleButton: {
     marginTop: 24,
@@ -189,6 +192,7 @@ const styles = StyleSheet.create({
   toggleText: {
     color: '#1a73e8',
     fontSize: 14,
+    fontFamily: 'Roboto_400Regular',
   },
 });
 

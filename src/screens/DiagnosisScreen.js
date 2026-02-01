@@ -171,6 +171,7 @@ const styles = StyleSheet.create({
   permText: {
       color: '#fff',
       textAlign: 'center',
+      fontFamily: 'Roboto_400Regular',
   },
   camera: {
     flex: 1,
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
   galleryText: {
     color: '#1a73e8',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
   },
   closeButton: {
       position: 'absolute',
@@ -218,6 +219,7 @@ const styles = StyleSheet.create({
   closeText: {
       color: '#fff',
       fontSize: 14,
+      fontFamily: 'Roboto_400Regular',
   },
   previewContainer: {
     flex: 1,
@@ -243,7 +245,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Roboto_500Medium',
   },
   secondaryButton: {
     backgroundColor: '#fff',
@@ -274,7 +276,7 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
       fontSize: 24,
-      fontWeight: 'bold',
+      fontFamily: 'Roboto_700Bold',
       marginBottom: 8,
       textAlign: 'center',
   },
@@ -283,11 +285,13 @@ const styles = StyleSheet.create({
       color: '#5f6368',
       marginBottom: 16,
       textAlign: 'center',
+      fontFamily: 'Roboto_400Regular',
   },
   details: {
       fontSize: 16,
       color: '#202124',
       lineHeight: 24,
+      fontFamily: 'Roboto_400Regular',
   },
 });
 
