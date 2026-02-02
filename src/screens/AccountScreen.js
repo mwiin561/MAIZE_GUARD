@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomDatePicker from '../components/CustomDatePicker';
 
 const AccountScreen = ({ navigation }) => {
   const [farmName, setFarmName] = useState('');
@@ -18,13 +18,9 @@ const AccountScreen = ({ navigation }) => {
 
   const units = ['Acres', 'Hectares', 'Sq Meters', 'Sq Miles'];
 
-  const onChangeDate = (event, selectedDate) => {
-    const currentDate = selectedDate || date;
-    setShowDatePicker(Platform.OS === 'ios');
-    setDate(currentDate);
-    if (Platform.OS !== 'ios') {
-        setShowDatePicker(false);
-    }
+  const handleDateSelect = (selectedDate) => {
+    setDate(selectedDate);
+    setShowDatePicker(false);
   };
 
   const showDatepicker = () => {
@@ -103,30 +99,12 @@ const AccountScreen = ({ navigation }) => {
                 <Ionicons name="calendar-outline" size={24} color="#5f6368" />
             </TouchableOpacity>
             
-            {/* Web-specific invisible date input overlay */}
-            {Platform.OS === 'web' && (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0 }}>
-                    <DateTimePicker
-                        testID="dateTimePickerWeb"
-                        value={date}
-                        mode="date"
-                        display="default"
-                        onChange={onChangeDate}
-                    />
-                </View>
-            )}
-
-            {/* Native Date Picker */}
-            {showDatePicker && Platform.OS !== 'web' && (
-                <DateTimePicker
-                testID="dateTimePicker"
-                value={date}
-                mode="date"
-                is24Hour={true}
-                display="default"
-                onChange={onChangeDate}
-                />
-            )}
+            <CustomDatePicker
+                visible={showDatePicker}
+                initialDate={date}
+                onClose={() => setShowDatePicker(false)}
+                onSelect={handleDateSelect}
+            />
           </View>
         </View>
 
