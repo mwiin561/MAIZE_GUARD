@@ -149,7 +149,10 @@ const GuideScreen = () => {
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab}>
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('Diagnosis')}
+      >
         <Ionicons name="camera" size={28} color="#fff" />
       </TouchableOpacity>
     </SafeAreaView>
