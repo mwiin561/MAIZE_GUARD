@@ -18,6 +18,7 @@ import DiagnosisScreen from './src/screens/DiagnosisScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HelpScreen from './src/screens/HelpScreen';
+import OfflineDatabaseScreen from './src/screens/OfflineDatabaseScreen';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -138,6 +139,7 @@ const AppNav = () => {
               <Stack.Screen name="Account" component={AccountScreen} />
               <Stack.Screen name="Diagnosis" component={DiagnosisScreen} />
               <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+              <Stack.Screen name="OfflineDatabase" component={OfflineDatabaseScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />

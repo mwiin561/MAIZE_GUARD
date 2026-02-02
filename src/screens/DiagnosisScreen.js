@@ -31,8 +31,13 @@ const DiagnosisScreen = ({ navigation }) => {
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync();
-        setImage(photo.uri);
+        const photo = await cameraRef.current.takePictureAsync({
+            base64: true,
+            quality: 0.5, // Reduce quality to save space
+        });
+        // Use base64 for persistent storage compatibility
+        const imageUri = `data:image/jpg;base64,${photo.base64}`;
+        setImage(imageUri);
       } catch (e) {
         Alert.alert('Error', 'Failed to take picture');
       }
@@ -44,11 +49,18 @@ const DiagnosisScreen = ({ navigation }) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 0.5, // Reduce quality
+      base64: true, // Request base64
     });
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      // Use base64 if available, otherwise fall back to uri (though on web uri is blob)
+      const imageUri = asset.base64 
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+        
+      setImage(imageUri);
     }
   };
 

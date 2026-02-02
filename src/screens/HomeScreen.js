@@ -49,11 +49,23 @@ const HomeScreen = ({ navigation }) => {
     loadHistory().then(() => setRefreshing(false));
   }, []);
 
-  const renderRecentItem = ({ item }) => {
+  const RecentScanItem = ({ item }) => {
+    const [imageError, setImageError] = useState(false);
     const isIssue = item.diagnosis.toLowerCase().includes('virus') || item.diagnosis.toLowerCase().includes('spot');
+    
     return (
       <TouchableOpacity style={styles.recentItem}>
-        <Image source={{ uri: item.image }} style={styles.recentImage} />
+        {imageError ? (
+            <View style={[styles.recentImage, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="image-outline" size={24} color="#ccc" />
+            </View>
+        ) : (
+            <Image 
+                source={{ uri: item.image }} 
+                style={styles.recentImage} 
+                onError={() => setImageError(true)}
+            />
+        )}
         <View style={styles.recentInfo}>
           <Text style={styles.recentTitle}>{item.diagnosis}</Text>
           <Text style={styles.recentDate}>{new Date(item.date).toLocaleDateString()}</Text>
@@ -67,6 +79,8 @@ const HomeScreen = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
+  const renderRecentItem = ({ item }) => <RecentScanItem item={item} />;
 
   const ListHeader = () => (
     <View>

@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-const SettingsScreen = () => {
+const SettingsScreen = ({ navigation }) => {
   const { logout, userInfo } = useContext(AuthContext);
 
-  const SettingItem = ({ icon, title, subtitle, hasSwitch }) => (
-    <TouchableOpacity style={styles.item} onPress={title === 'Log Out' ? logout : null}>
+  const SettingItem = ({ icon, title, subtitle, hasSwitch, onPress }) => (
+    <TouchableOpacity style={styles.item} onPress={onPress || (title === 'Log Out' ? logout : null)}>
       <View style={styles.iconContainer}>
         <Ionicons name={icon} size={24} color="#555" />
       </View>
@@ -43,7 +43,12 @@ const SettingsScreen = () => {
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>General</Text>
             <View style={styles.card}>
-                <SettingItem icon="download-outline" title="Offline Database" subtitle="Last synced: 2 hours ago" />
+                <SettingItem 
+                    icon="download-outline" 
+                    title="Offline Database" 
+                    subtitle="Last synced: 2 hours ago" 
+                    onPress={() => navigation.navigate('OfflineDatabase')}
+                />
                 <SettingItem icon="map-outline" title="Offline Maps" />
                 <SettingItem icon="document-text-outline" title="Export Scan History" />
             </View>
