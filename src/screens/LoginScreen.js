@@ -133,6 +133,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#202124',
     fontFamily: 'Roboto_400Regular',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   button: {
     backgroundColor: '#1a73e8', // Google Blue

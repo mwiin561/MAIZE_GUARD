@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   FlatList, 
   Image, 
-  Dimensions 
+  Dimensions,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -105,9 +106,6 @@ const GuideScreen = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <TouchableOpacity>
-          <Ionicons name="options-outline" size={24} color="#666" />
-        </TouchableOpacity>
       </View>
 
       {/* Filters */}
@@ -196,6 +194,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Roboto_400Regular',
     color: '#333',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   filterContainer: {
     marginBottom: 20,

@@ -49,7 +49,11 @@ const SettingsScreen = ({ navigation }) => {
                     subtitle="Last synced: 2 hours ago" 
                     onPress={() => navigation.navigate('OfflineDatabase')}
                 />
-                <SettingItem icon="map-outline" title="Offline Maps" />
+                <SettingItem 
+                    icon="map-outline" 
+                    title="Offline Maps" 
+                    onPress={() => navigation.navigate('OfflineMap')}
+                />
                 <SettingItem icon="document-text-outline" title="Export Scan History" />
             </View>
         </View>
@@ -57,7 +61,11 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>App</Text>
             <View style={styles.card}>
-                <SettingItem icon="help-circle-outline" title="Help & Feedback" />
+                <SettingItem 
+    icon="help-circle-outline" 
+    title="Help & Feedback" 
+    onPress={() => navigation.navigate('Help')}
+/>
                 <SettingItem icon="log-out-outline" title="Log Out" />
             </View>
         </View>

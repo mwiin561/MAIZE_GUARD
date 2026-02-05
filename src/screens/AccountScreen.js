@@ -271,6 +271,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto_400Regular',
     color: '#000',
     backgroundColor: '#fff',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   dateInputContainer: {
     position: 'relative',
@@ -358,6 +363,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Roboto_400Regular',
     color: '#000',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   dropdownSelector: {
     flexDirection: 'row',
