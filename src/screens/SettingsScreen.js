@@ -49,11 +49,7 @@ const SettingsScreen = ({ navigation }) => {
                     subtitle="Last synced: 2 hours ago" 
                     onPress={() => navigation.navigate('OfflineDatabase')}
                 />
-                <SettingItem 
-                    icon="map-outline" 
-                    title="Offline Maps" 
-                    onPress={() => navigation.navigate('OfflineMap')}
-                />
+
                 <SettingItem icon="document-text-outline" title="Export Scan History" />
             </View>
         </View>
