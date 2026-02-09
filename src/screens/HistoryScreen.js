@@ -11,7 +11,9 @@ const HistoryScreen = ({ navigation }) => {
     try {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (stored) {
-        setHistory(JSON.parse(stored));
+        // Parse and take only the latest 20 items
+        const allHistory = JSON.parse(stored);
+        setHistory(allHistory.slice(0, 20));
       }
     } catch (e) {
       console.log('Failed to load history');
