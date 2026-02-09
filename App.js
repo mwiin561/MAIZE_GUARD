@@ -12,7 +12,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import GuideScreen from './src/screens/GuideScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DiagnosisScreen from './src/screens/DiagnosisScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
@@ -61,8 +60,6 @@ const MainDrawer = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Account') {
             iconName = focused ? 'person-circle' : 'person-circle-outline';
-          } else if (route.name === 'Guide') {
-            iconName = focused ? 'book' : 'book-outline';
           } else if (route.name === 'Settings') {
             iconName = focused ? 'settings' : 'settings-outline';
           } else if (route.name === 'Help') {
@@ -73,14 +70,6 @@ const MainDrawer = () => {
       })}
     >
       <Drawer.Screen name="HomeDrawer" component={HomeScreen} options={{ title: 'Home' }} />
-      <Drawer.Screen 
-        name="Guide" 
-        component={GuideScreen} 
-        options={{ 
-          title: 'Guide',
-          headerShown: false 
-        }} 
-      />
       <Drawer.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Drawer.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Feedback' }} />
     </Drawer.Navigator>
