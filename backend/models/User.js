@@ -14,6 +14,14 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  region: {
+    type: String,
+    default: 'Unknown'
+  },
+  farmSize: {
+    type: String,
+    default: 'Unknown'
+  },
   date: {
     type: Date,
     default: Date.now

@@ -8,7 +8,7 @@ const User = require('../models/User');
 // @desc    Register user
 // @access  Public
 router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, region, farmSize } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -20,7 +20,9 @@ router.post('/register', async (req, res) => {
     user = new User({
       name,
       email,
-      password
+      password,
+      region,
+      farmSize
     });
 
     const salt = await bcrypt.genSalt(10);

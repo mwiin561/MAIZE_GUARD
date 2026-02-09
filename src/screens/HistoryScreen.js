@@ -27,7 +27,7 @@ const HistoryScreen = ({ navigation }) => {
   );
 
   const renderItem = ({ item }) => {
-    const isVirus = item.diagnosis.includes('Virus') || item.diagnosis.includes('Spot');
+    const isInfected = item.diagnosis === 'Maize Streak Virus';
     return (
       <TouchableOpacity style={styles.card}>
         <Image source={{ uri: item.image }} style={styles.cardImage} />
@@ -35,9 +35,9 @@ const HistoryScreen = ({ navigation }) => {
           <Text style={styles.cardTitle}>{item.diagnosis}</Text>
           <Text style={styles.cardDate}>{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: isVirus ? '#ffebee' : '#e8f5e9' }]}>
-            <Text style={[styles.statusText, { color: isVirus ? '#c62828' : '#2e7d32' }]}>
-                {isVirus ? 'Action Req' : 'Optimal'}
+        <View style={[styles.statusBadge, { backgroundColor: isInfected ? '#ffebee' : '#e8f5e9' }]}>
+            <Text style={[styles.statusText, { color: isInfected ? '#c62828' : '#2e7d32' }]}>
+                {isInfected ? 'Action Req' : 'Optimal'}
             </Text>
         </View>
       </TouchableOpacity>

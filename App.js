@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Roboto_400Regular, Roboto_500Medium, Roboto_700Bold } from '@expo-google-fonts/roboto';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import ModelService from './src/services/ModelService';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -90,6 +91,9 @@ const AppNav = () => {
   useEffect(() => {
     async function prepare() {
       try {
+        // Initialize Model Service (Download offline model if needed)
+        ModelService.init().catch(err => console.log('ModelService init silent fail:', err));
+
         // Artificially delay for 2 seconds as requested for the logo splash
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (e) {

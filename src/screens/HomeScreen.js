@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { syncScans, uploadScanImage } from '../api/client';
 
 const { width } = Dimensions.get('window');
 
@@ -27,14 +28,99 @@ const HomeScreen = ({ navigation }) => {
         // Calculate stats
         const total = data.length;
         const issues = data.filter(item => 
-          item.diagnosis.toLowerCase().includes('virus') || 
-          item.diagnosis.toLowerCase().includes('spot')
+          item.diagnosis === 'Maize Streak Virus'
         ).length;
         
         setStats({ total, issues });
+
+        // Trigger Silent Sync for unsynced items
+        performSilentSync(data);
       }
     } catch (e) {
       console.log('Failed to load history');
+    }
+  };
+
+  const performSilentSync = async (currentHistory) => {
+    const unsyncedItems = currentHistory.filter(item => !item.synced && item.userVerified);
+    
+    if (unsyncedItems.length === 0) return;
+
+    console.log(`Found ${unsyncedItems.length} unsynced items. Attempting sync...`);
+
+    let updatedHistory = [...currentHistory];
+    let syncBatch = [];
+    let itemsToSync = [];
+
+    for (const item of unsyncedItems) {
+        try {
+            let remoteUrl = item.remoteImage;
+
+            // 1. Upload Image if needed
+            if (!remoteUrl && item.image) {
+                try {
+                    const uploadRes = await uploadScanImage(item.image);
+                    remoteUrl = uploadRes.imageUrl;
+                    // Update local item with remote URL immediately so we don't re-upload next time if sync fails
+                    const index = updatedHistory.findIndex(h => h.id === item.id);
+                    if (index !== -1) updatedHistory[index].remoteImage = remoteUrl;
+                } catch (err) {
+                    console.log(`Failed to upload image for item ${item.id}, skipping sync for this item.`);
+                    continue; // Skip this item if image upload fails
+                }
+            }
+
+            // 2. Prepare Scan Data
+            const scanData = {
+                localId: item.id,
+                imageMetadata: {
+                  resolution: 'Unknown', 
+                  orientation: 'Portrait'
+                },
+                location: item.location,
+                environment: {
+                    leafhopperObserved: item.leafhopperObserved || 'Not Sure'
+                },
+                diagnosis: {
+                  modelPrediction: item.diagnosis, // Assuming diagnosis holds the final label
+                  confidence: parseFloat(item.confidence),
+                  userVerified: true,
+                  finalDiagnosis: item.diagnosis
+                },
+                imageUrl: remoteUrl
+            };
+            
+            syncBatch.push(scanData);
+            itemsToSync.push(item.id);
+
+        } catch (e) {
+            console.log('Error preparing item for sync:', e);
+        }
+    }
+
+    if (syncBatch.length > 0) {
+        try {
+            // 3. Send Batch to Backend
+            const result = await syncScans(syncBatch);
+            console.log('Sync successful:', result);
+
+            // 4. Update Local History as Synced
+            updatedHistory = updatedHistory.map(item => {
+                if (itemsToSync.includes(item.id)) {
+                    return { ...item, synced: true };
+                }
+                return item;
+            });
+
+            await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
+            setHistory(updatedHistory); // Update state
+            
+        } catch (e) {
+            console.log('Sync batch failed:', e);
+            // If partial success logic needed, handle here. For now, we retry next time.
+            // However, we did update remoteImage in updatedHistory, so let's save that at least.
+            await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
+        }
     }
   };
 
@@ -51,7 +137,7 @@ const HomeScreen = ({ navigation }) => {
 
   const RecentScanItem = ({ item }) => {
     const [imageError, setImageError] = useState(false);
-    const isIssue = item.diagnosis.toLowerCase().includes('virus') || item.diagnosis.toLowerCase().includes('spot');
+    const isIssue = item.diagnosis === 'Maize Streak Virus';
     
     return (
       <TouchableOpacity style={styles.recentItem}>

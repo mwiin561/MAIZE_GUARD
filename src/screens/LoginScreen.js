@@ -4,8 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 
 const LoginScreen = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [region, setRegion] = useState('');
+  const [farmSize, setFarmSize] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const { login, signup, googleLogin, isLoading } = useContext(AuthContext);
 
@@ -18,7 +21,11 @@ const LoginScreen = () => {
     if (isLogin) {
       await login(email, password);
     } else {
-      const success = await signup(email, password);
+      if (!name) {
+         Alert.alert('Error', 'Please enter your name');
+         return;
+      }
+      const success = await signup(name, email, password, region || 'Unknown', farmSize || 'Unknown');
       if (success) {
         Alert.alert('Success', 'Account created successfully!');
       }
@@ -47,6 +54,29 @@ const LoginScreen = () => {
         </View>
 
         <View style={styles.form}>
+          {!isLogin && (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Full Name"
+                value={name}
+                onChangeText={setName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Region (Optional)"
+                value={region}
+                onChangeText={setRegion}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Farm Size in Acres (Optional)"
+                value={farmSize}
+                onChangeText={setFarmSize}
+                keyboardType="numeric"
+              />
+            </>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Email"

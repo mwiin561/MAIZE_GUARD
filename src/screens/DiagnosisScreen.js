@@ -1,17 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { uploadScanImage, saveScan } from '../api/client';
+import ModelService from '../services/ModelService';
 
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [image, setImage] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [userCorrection, setUserCorrection] = useState('');
+  const [remoteImageUrl, setRemoteImageUrl] = useState(null); // URL from backend
+  const [location, setLocation] = useState(null);
+  const [leafhopperObserved, setLeafhopperObserved] = useState('Not Sure');
   const cameraRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location);
+    })();
+  }, []);
+
+  const diseases = [
+    'Maize Streak Virus',
+    'Healthy'
+  ];
 
   if (!permission) {
     return <View />;
@@ -28,16 +56,31 @@ const DiagnosisScreen = ({ navigation }) => {
     );
   }
 
+  const processImage = async (uri) => {
+    try {
+      // Low-End Device Optimization: Resize to 1024px width, Compress to 70%
+      const manipResult = await manipulateAsync(
+        uri,
+        [{ resize: { width: 1024 } }], 
+        { compress: 0.7, format: SaveFormat.JPEG }
+      );
+      return manipResult.uri;
+    } catch (error) {
+      console.log('Image processing failed:', error);
+      return uri; // Fallback to original if optimization fails
+    }
+  };
+
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
-            base64: true,
-            quality: 0.5, // Reduce quality to save space
+            quality: 1,
+            skipProcessing: true, // Speed up capture
         });
-        // Use base64 for persistent storage compatibility
-        const imageUri = `data:image/jpg;base64,${photo.base64}`;
-        setImage(imageUri);
+        
+        const optimizedUri = await processImage(photo.uri);
+        setImage(optimizedUri);
       } catch (e) {
         Alert.alert('Error', 'Failed to take picture');
       }
@@ -49,63 +92,161 @@ const DiagnosisScreen = ({ navigation }) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5, // Reduce quality
-      base64: true, // Request base64
+      quality: 1, 
     });
 
     if (!result.canceled) {
       const asset = result.assets[0];
-      // Use base64 if available, otherwise fall back to uri (though on web uri is blob)
-      const imageUri = asset.base64 
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
-        
-      setImage(imageUri);
+      const optimizedUri = await processImage(asset.uri);
+      setImage(optimizedUri);
     }
   };
 
   const analyzeImage = async () => {
     setAnalyzing(true);
-    // Mock AI Analysis
-    setTimeout(async () => {
-      const isInfected = Math.random() > 0.5; // Toggle for testing, or set to true to match design always
-      const confidence = (Math.random() * (0.99 - 0.85) + 0.85).toFixed(2); // High confidence for demo
+    
+    // Upload Image in background (Offline First approach: We save local first, then try upload)
+    let remoteImageUrl = null;
+    try {
+      // Note: In a real app, we'd use NetInfo to check connectivity first
+      console.log('Attempting to upload image...');
+      const uploadResult = await uploadScanImage(image);
+      remoteImageUrl = uploadResult.imageUrl;
+      console.log('Image uploaded:', remoteImageUrl);
+    } catch (e) {
+      console.log('Offline or Upload failed, saving locally only for now:', e);
+    }
+
+    // Mock AI Analysis (Fallback if ModelService returns null)
+    const runMockAnalysis = async () => {
+       return new Promise((resolve) => {
+         setTimeout(() => {
+            const isInfected = Math.random() > 0.4; // 60% chance of infection for demo
+            const confidence = (Math.random() * (0.99 - 0.85) + 0.85).toFixed(2);
+            resolve({ isInfected, confidence });
+         }, 2000);
+       });
+    };
+
+    try {
+      // 1. Try Local Offline Model
+      let analysisResult = await ModelService.predict(image);
+      
+      // 2. Fallback to Mock if Model not ready
+      if (!analysisResult) {
+         analysisResult = await runMockAnalysis();
+      }
+
+      const { isInfected, confidence } = analysisResult;
       
       const diagnosisResult = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         image: image,
-        title: isInfected ? 'Gray Leaf Spot Detected' : 'Healthy Maize Plant',
-        diagnosis: isInfected ? 'Gray Leaf Spot' : 'Healthy',
+        remoteImage: remoteImageUrl, // Save the remote URL if available
+        title: isInfected ? 'Maize Streak Virus Detected' : 'Healthy Maize Plant',
+        diagnosis: isInfected ? 'Maize Streak Virus' : 'Healthy',
         confidence: confidence,
         description: isInfected 
-          ? 'A common fungal disease in maize caused by Cercospora zeae-maydis. It thrives in humid conditions and can significantly impact yield if not managed.' 
-          : 'Your plant appears healthy and free from common diseases. Continue with regular care and monitoring.',
+          ? 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.' 
+          : 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.',
         immediateActions: isInfected ? [
-          'Isolate or remove heavily infected plants to stop spread.',
-          'Ensure proper spacing for air circulation.'
+          'Remove and destroy infected plants immediately to prevent spread.',
+          'Control leafhopper populations using recommended insecticides.',
+          'Clear grass weeds around the field which may host the virus.'
         ] : [
           'Continue regular watering schedule.',
-          'Monitor for any changes in leaf color.'
+          'Monitor for presence of leafhoppers.',
+          'Keep field weed-free.'
         ],
         longTermPrevention: isInfected ? [
-          'Practice 2-3 year crop rotation with non-host crops like soybeans.',
-          'Select resistant hybrids (GLS resistant) for the next planting season.'
+          'Plant MSV-resistant maize varieties.',
+          'Plant early to avoid peak leafhopper populations.',
+          'Practice crop rotation.'
         ] : [
-          'Rotate crops annually to maintain soil health.',
-          'Use certified disease-free seeds.'
+          'Use certified disease-free seeds.',
+          'Maintain field hygiene.'
         ],
         chemicalControl: isInfected 
-          ? 'If disease exceeds 5% of leaf area before pollination, apply strobilurin or triazole fungicides. Consult local experts for regional recommendations.'
+          ? 'Use seed dressings (e.g., Imidacloprid) before planting to protect seedlings. Foliar sprays may be needed if vector population is high.'
           : 'No chemical control needed at this time.'
       };
 
       setResult(diagnosisResult);
       setAnalyzing(false);
       
-      // Save to history
-      await saveToHistory(diagnosisResult);
-    }, 2000);
+      // Auto-save is deferred until verification
+      // await saveToHistory(diagnosisResult);
+
+    } catch (e) {
+      console.error('Analysis failed:', e);
+      setAnalyzing(false);
+      Alert.alert('Error', 'Analysis failed. Please try again.');
+    }
+  };
+
+  const handleVerification = async (isCorrect, correctedLabel = null) => {
+    try {
+      if (!result) return;
+
+      const finalDiagnosis = isCorrect ? result.diagnosis : correctedLabel;
+      
+      // Create full scan record for backend
+      const scanData = {
+        localId: result.id,
+        imageMetadata: {
+          resolution: 'Unknown', 
+          orientation: 'Portrait'
+        },
+        location: location ? {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        } : null,
+        environment: {
+            leafhopperObserved: leafhopperObserved
+        },
+        diagnosis: {
+          modelPrediction: result.diagnosis,
+          confidence: parseFloat(result.confidence),
+          userVerified: true,
+          finalDiagnosis: finalDiagnosis
+        },
+        imageUrl: remoteImageUrl // might be null if offline
+      };
+
+      // 1. Save Locally (History)
+      const historyItem = {
+        ...result,
+        diagnosis: finalDiagnosis,
+        userVerified: true,
+        location: location ? {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude
+        } : null,
+        leafhopperObserved: leafhopperObserved,
+        synced: false // Default to false
+      };
+
+      // 2. Try to Sync with Backend (if online)
+      if (remoteImageUrl) {
+         try {
+            await saveScan(scanData);
+            historyItem.synced = true; // Mark as synced if successful
+            Alert.alert('Thank You', 'Your feedback helps improve Maize Guard!');
+         } catch (err) {
+            console.log('Online save failed, saved locally:', err);
+         }
+      } else {
+         Alert.alert('Saved', 'Result saved to history (Offline Mode)');
+      }
+
+      await saveToHistory(historyItem);
+      
+      setShowCorrectionModal(false);
+    } catch (e) {
+      console.log('Verification save failed:', e);
+      Alert.alert('Error', 'Failed to save feedback.');
+    }
   };
 
   const saveToHistory = async (newDiagnosis) => {
@@ -122,6 +263,7 @@ const DiagnosisScreen = ({ navigation }) => {
   const reset = () => {
     setImage(null);
     setResult(null);
+    setLeafhopperObserved('Not Sure');
   };
 
   if (result) {
@@ -151,6 +293,53 @@ const DiagnosisScreen = ({ navigation }) => {
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>
               <Text style={styles.description}>{result.description}</Text>
+
+              {/* Feedback Section */}
+              <View style={{ marginBottom: 16, padding: 10, backgroundColor: '#f0f9f0', borderRadius: 8 }}>
+                 
+                 {/* Leaf Hopper Query */}
+                 <View style={{ marginBottom: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#2c3e50' }}>Did you see any leafhoppers?</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                        {['Yes', 'No', 'Not Sure'].map((option) => (
+                            <TouchableOpacity 
+                                key={option}
+                                onPress={() => setLeafhopperObserved(option)}
+                                style={{
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 20,
+                                    backgroundColor: leafhopperObserved === option ? '#4CAF50' : '#e0e0e0',
+                                }}
+                            >
+                                <Text style={{ 
+                                    color: leafhopperObserved === option ? '#fff' : '#333',
+                                    fontWeight: '500'
+                                }}>{option}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                 </View>
+
+                 <Text style={{ fontWeight: '600', marginBottom: 10, color: '#2c3e50' }}>Is this diagnosis correct?</Text>
+                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <TouchableOpacity 
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#2ecc71', padding: 8, borderRadius: 5, flex: 1, marginRight: 5, justifyContent: 'center' }}
+                      onPress={() => handleVerification(true)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={{ color: '#fff', marginLeft: 5, fontWeight: '600' }}>Yes</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#e74c3c', padding: 8, borderRadius: 5, flex: 1, marginLeft: 5, justifyContent: 'center' }}
+                      onPress={() => setShowCorrectionModal(true)}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#fff" />
+                      <Text style={{ color: '#fff', marginLeft: 5, fontWeight: '600' }}>No</Text>
+                    </TouchableOpacity>
+                 </View>
+              </View>
               
               <TouchableOpacity style={styles.galleryButton}>
                 <Ionicons name="images-outline" size={20} color="#4CAF50" style={{ marginRight: 8 }} />
@@ -227,6 +416,37 @@ const DiagnosisScreen = ({ navigation }) => {
                 <Text style={[styles.buttonText, styles.secondaryText]}>New Diagnosis</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Correction Modal */}
+        <Modal
+          visible={showCorrectionModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>What is the correct diagnosis?</Text>
+              <ScrollView style={{ maxHeight: 300 }}>
+                {diseases.map((d) => (
+                  <TouchableOpacity 
+                    key={d} 
+                    style={styles.diseaseOption}
+                    onPress={() => handleVerification(false, d)}
+                  >
+                    <Text style={styles.diseaseText}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => setShowCorrectionModal(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     );
   }
@@ -549,6 +769,51 @@ const styles = StyleSheet.create({
   secondaryText: {
     color: '#1a73e8',
   },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  diseaseOption: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  diseaseText: {
+    fontSize: 16,
+  },
+  cancelButton: {
+    marginTop: 15,
+    padding: 10,
+    alignItems: 'center',
+    backgroundColor: '#eee',
+    borderRadius: 8,
+  },
+  cancelText: {
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  galleryButtonText: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: 'bold'
+  }
 });
 
 export default DiagnosisScreen;

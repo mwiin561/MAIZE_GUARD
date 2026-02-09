@@ -2,6 +2,8 @@ import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
+import { loginUser, registerUser } from '../api/client';
+
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -9,36 +11,26 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
 
-  // Helper to get all users
-  const getUsers = async () => {
-    try {
-      const users = await AsyncStorage.getItem('registeredUsers');
-      return users ? JSON.parse(users) : {};
-    } catch (e) {
-      console.log('Error getting users', e);
-      return {};
-    }
-  };
-
-  const signup = async (email, password) => {
+  const signup = async (name, email, password, region, farmSize) => {
     setIsLoading(true);
     try {
-      const users = await getUsers();
-      if (users[email]) {
-        Alert.alert('Error', 'User already exists. Please login.');
-        setIsLoading(false);
-        return false;
-      }
-
-      // Create new user
-      users[email] = { password };
-      await AsyncStorage.setItem('registeredUsers', JSON.stringify(users));
+      const data = await registerUser(name, email, password, region, farmSize);
       
-      // Auto login after signup
-      await login(email, password);
+      // Auto login after signup (Backend returns token on register usually, but if not we login)
+      // Our backend returns { token } on register
+      if (data.token) {
+        setUserToken(data.token);
+        const info = { name, email, region, farmSize };
+        setUserInfo(info);
+        await AsyncStorage.setItem('userToken', data.token);
+        await AsyncStorage.setItem('userInfo', JSON.stringify(info));
+      }
+      
+      setIsLoading(false);
       return true;
     } catch (e) {
       console.log('Signup error', e);
+      Alert.alert('Signup Failed', e.message);
       setIsLoading(false);
       return false;
     }
@@ -47,26 +39,22 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setIsLoading(true);
     try {
-      const users = await getUsers();
+      const data = await loginUser(email, password);
       
-      if (users[email] && users[email].password === password) {
-        const token = 'dummy-auth-token-' + Date.now();
-        const info = { email };
-        
-        setUserToken(token);
+      if (data.token) {
+        setUserToken(data.token);
+        // We might want to fetch user profile here if backend supported it
+        const info = { email }; 
         setUserInfo(info);
         
-        await AsyncStorage.setItem('userToken', token);
+        await AsyncStorage.setItem('userToken', data.token);
         await AsyncStorage.setItem('userInfo', JSON.stringify(info));
         setIsLoading(false);
         return true;
-      } else {
-        Alert.alert('Error', 'Invalid email or password. Please check your credentials or sign up.');
-        setIsLoading(false);
-        return false;
       }
     } catch (e) {
       console.log('Login error', e);
+      Alert.alert('Login Failed', e.message);
       setIsLoading(false);
       return false;
     }

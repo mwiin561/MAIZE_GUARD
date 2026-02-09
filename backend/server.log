@@ -1,0 +1,29 @@
+﻿
+> maize_guard_backend@1.0.0 dev
+> nodemon server.js
+
+[33m[nodemon] 3.1.11[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server.js`[39m
+Attempting to connect to mongodb://127.0.0.1:27017/maizeguard...
+Server running on port 5001
+node.exe : Failed to connect to provided MONGO_URI. Falling back to 
+In-Memory DB...
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Failed to conne...In-Memor 
+   y DB...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+InMemory MongoDB Connected at mongodb://127.0.0.1:50675/
+region is not defined
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+Attempting to connect to mongodb://127.0.0.1:27017/maizeguard...
+Server running on port 5001
+Failed to connect to provided MONGO_URI. Falling back to In-Memory DB...
+InMemory MongoDB Connected at mongodb://127.0.0.1:50703/

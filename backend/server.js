@@ -7,13 +7,23 @@ const connectDB = require('./config/db');
 dotenv.config();
 
 // Connect to database
-// connectDB(); // Commented out until you provide a MONGO_URI
+(async () => {
+  await connectDB();
+})();
+
+
 
 const app = express();
+
+const path = require('path');
 
 // Middleware
 app.use(cors());
 app.use(express.json()); // Body parser
+
+// Static folder for serving models
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
 
 // Basic Route
 app.get('/', (req, res) => {
@@ -22,7 +32,8 @@ app.get('/', (req, res) => {
 
 // Define Routes
 app.use('/api/auth', require('./routes/auth'));
-// app.use('/api/scans', require('./routes/scans'));
+app.use('/api/scans', require('./routes/scans'));
+app.use('/api/admin', require('./routes/admin'));
 
 const PORT = process.env.PORT || 5000;
 
