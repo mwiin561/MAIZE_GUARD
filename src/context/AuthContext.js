@@ -1,8 +1,13 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 
 import { loginUser, registerUser, getUserProfile, updateUserProfile } from '../api/client';
+
+// Required for Web support
+WebBrowser.maybeCompleteAuthSession();
 
 export const AuthContext = createContext();
 
@@ -10,6 +15,79 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [userToken, setUserToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+
+  // Google Auth Request Hook
+  // IMPORTANT: You must replace these Client IDs with your own from Google Cloud Console
+  // https://console.cloud.google.com/apis/credentials
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
+    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+    webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      handleGoogleSignIn(authentication.accessToken);
+    } else if (response?.type === 'error') {
+        Alert.alert('Google Sign In Error', 'Authentication failed.');
+        setIsLoading(false);
+    }
+  }, [response]);
+
+  const handleGoogleSignIn = async (accessToken) => {
+    setIsLoading(true);
+    try {
+        // 1. Fetch User Info from Google
+        const userRes = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const googleUser = await userRes.json();
+        
+        const googleEmail = googleUser.email;
+        const googleName = googleUser.name;
+        // Use Google ID as part of password for consistency
+        const googlePassword = `google_oauth_${googleUser.id}`; 
+
+        // 2. Try to Login first
+        let data;
+        try {
+            data = await loginUser(googleEmail, googlePassword);
+        } catch (loginErr) {
+            // 3. If login fails (user doesn't exist), Register automatically
+            console.log('Google user not found, registering...', loginErr);
+            try {
+                data = await registerUser(googleName, googleEmail, googlePassword, 'Unknown', 'Unknown');
+            } catch (regErr) {
+                throw new Error('Could not create account with Google. Please try standard Sign Up.');
+            }
+        }
+        
+        if (data && data.token) {
+            setUserToken(data.token);
+            
+            // Fetch User Profile
+            try {
+                const userProfile = await getUserProfile(data.token);
+                setUserInfo(userProfile);
+                await AsyncStorage.setItem('userInfo', JSON.stringify(userProfile));
+            } catch (profileErr) {
+                const info = { name: googleName, email: googleEmail }; 
+                setUserInfo(info);
+                await AsyncStorage.setItem('userInfo', JSON.stringify(info));
+            }
+            
+            await AsyncStorage.setItem('userToken', data.token);
+            return true;
+        }
+
+    } catch (e) {
+        console.log('Google Auth Error', e);
+        Alert.alert('Google Sign In Failed', e.message);
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   const signup = async (name, email, password, region, farmSize) => {
     setIsLoading(true);
@@ -80,43 +158,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const googleLogin = async () => {
-    setIsLoading(true);
-    // Simulate Google Login delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Mock Google User Data
-    const googleEmail = `google_user_${Math.floor(Math.random() * 1000)}@gmail.com`;
-    const googlePassword = 'google_secure_password_placeholder'; // Internal use only
-
-    try {
-      const users = await getUsers();
-      
-      // If user doesn't exist, create account automatically (Exception rule)
-      if (!users[googleEmail]) {
-        users[googleEmail] = { password: googlePassword, isGoogle: true };
-        await AsyncStorage.setItem('registeredUsers', JSON.stringify(users));
-        console.log('New Google user created automatically');
-      }
-
-      // Login
-      const token = 'google-auth-token-' + Date.now();
-      const info = { email: googleEmail, isGoogle: true };
-      
-      setUserToken(token);
-      setUserInfo(info);
-      
-      await AsyncStorage.setItem('userToken', token);
-      await AsyncStorage.setItem('userInfo', JSON.stringify(info));
-      
-      setIsLoading(false);
-      return true;
-
-    } catch (e) {
-      console.log('Google Login error', e);
-      Alert.alert('Error', 'Google Sign In failed');
-      setIsLoading(false);
-      return false;
+  const googleLogin = () => {
+    if (request) {
+        promptAsync();
+    } else {
+        Alert.alert('Not Ready', 'Google Sign In is initializing. Please try again in a moment.');
     }
   };
 
