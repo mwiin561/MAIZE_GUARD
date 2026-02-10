@@ -3,6 +3,51 @@ import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { API_URL } from '../api/client';
+
+const SERVER_URL = API_URL.replace('/api', '');
+
+const HistoryItem = ({ item }) => {
+    const [imageError, setImageError] = useState(false);
+    const isInfected = item.diagnosis === 'Maize Streak Virus';
+
+    // Resolve Image Source
+    let imageSource = null;
+    if (item.image && !item.image.startsWith('blob:')) {
+        imageSource = { uri: item.image };
+    } else if (item.remoteImage) {
+        const uri = item.remoteImage.startsWith('http') 
+            ? item.remoteImage 
+            : `${SERVER_URL}${item.remoteImage}`;
+        imageSource = { uri };
+    }
+    
+    return (
+      <TouchableOpacity style={styles.card}>
+        {imageError || !imageSource ? (
+            <View style={[styles.cardImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
+                <Ionicons name="image-outline" size={24} color="#999" />
+            </View>
+        ) : (
+            <Image 
+                source={imageSource} 
+                style={styles.cardImage} 
+                onError={() => setImageError(true)}
+            />
+        )}
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>{item.diagnosis}</Text>
+          <Text style={styles.cardDate}>{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: isInfected ? '#ffebee' : '#e8f5e9' }]}>
+            <Text style={[styles.statusText, { color: isInfected ? '#c62828' : '#2e7d32' }]}>
+                {isInfected ? 'Action Req' : 'Optimal'}
+            </Text>
+        </View>
+      </TouchableOpacity>
+    );
+};
 
 const HistoryScreen = ({ navigation }) => {
   const [history, setHistory] = useState([]);
@@ -12,7 +57,11 @@ const HistoryScreen = ({ navigation }) => {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (stored) {
         // Parse and take only the latest 20 items
-        const allHistory = JSON.parse(stored);
+        let allHistory = JSON.parse(stored);
+        
+        // Removed blob cleanup to allow valid current-session blobs to show.
+        // Image onError will handle invalid ones.
+
         setHistory(allHistory.slice(0, 20));
       }
     } catch (e) {
@@ -27,21 +76,7 @@ const HistoryScreen = ({ navigation }) => {
   );
 
   const renderItem = ({ item }) => {
-    const isInfected = item.diagnosis === 'Maize Streak Virus';
-    return (
-      <TouchableOpacity style={styles.card}>
-        <Image source={{ uri: item.image }} style={styles.cardImage} />
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.diagnosis}</Text>
-          <Text style={styles.cardDate}>{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: isInfected ? '#ffebee' : '#e8f5e9' }]}>
-            <Text style={[styles.statusText, { color: isInfected ? '#c62828' : '#2e7d32' }]}>
-                {isInfected ? 'Action Req' : 'Optimal'}
-            </Text>
-        </View>
-      </TouchableOpacity>
-    );
+    return <HistoryItem item={item} />;
   };
 
   return (

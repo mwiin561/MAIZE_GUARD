@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
-import { loginUser, registerUser } from '../api/client';
+import { loginUser, registerUser, getUserProfile, updateUserProfile } from '../api/client';
 
 export const AuthContext = createContext();
 
@@ -43,12 +43,20 @@ export const AuthProvider = ({ children }) => {
       
       if (data.token) {
         setUserToken(data.token);
-        // We might want to fetch user profile here if backend supported it
-        const info = { email }; 
-        setUserInfo(info);
+        
+        // Fetch User Profile
+        try {
+            const userProfile = await getUserProfile(data.token);
+            setUserInfo(userProfile);
+            await AsyncStorage.setItem('userInfo', JSON.stringify(userProfile));
+        } catch (profileErr) {
+            console.log('Profile fetch failed, using basic info', profileErr);
+            const info = { email }; 
+            setUserInfo(info);
+            await AsyncStorage.setItem('userInfo', JSON.stringify(info));
+        }
         
         await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('userInfo', JSON.stringify(info));
         setIsLoading(false);
         return true;
       }
@@ -57,6 +65,18 @@ export const AuthProvider = ({ children }) => {
       Alert.alert('Login Failed', e.message);
       setIsLoading(false);
       return false;
+    }
+  };
+
+  const updateProfile = async (profileData) => {
+    try {
+        const updatedUser = await updateUserProfile(profileData);
+        setUserInfo(updatedUser);
+        await AsyncStorage.setItem('userInfo', JSON.stringify(updatedUser));
+        return true;
+    } catch (e) {
+        console.log('Update profile error', e);
+        throw e;
     }
   };
 
@@ -135,7 +155,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ login, signup, googleLogin, logout, isLoading, userToken, userInfo }}>
+    <AuthContext.Provider value={{ login, signup, googleLogin, logout, isLoading, userToken, userInfo, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

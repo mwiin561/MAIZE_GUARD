@@ -1,8 +1,11 @@
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
+import { Platform } from 'react-native';
 
 // Match the IP used in client.js
-const SERVER_URL = 'http://10.0.2.2:5001'; 
+const SERVER_URL = Platform.OS === 'web' 
+  ? 'http://localhost:5001' 
+  : 'http://10.0.2.2:5001'; 
 const MODEL_URL = `${SERVER_URL}/public/models/v1/model.tflite`;
 const LOCAL_MODEL_DIR = `${FileSystem.documentDirectory}models/`;
 const LOCAL_MODEL_PATH = `${LOCAL_MODEL_DIR}model.tflite`;
@@ -27,7 +30,8 @@ class ModelService {
       } else {
         // 2. Fallback to Bundled Asset
         console.log('Using bundled model (v1)...');
-        const asset = Asset.fromModule(require('../../assets/model.tflite'));
+        // Hack: Append .mp4 to bypass Metro config issues with .tflite (and .png image-size check)
+        const asset = Asset.fromModule(require('../../assets/model.tflite.mp4'));
         await asset.downloadAsync(); // Ensures it's available in cache
         this.modelUri = asset.localUri;
         console.log('Bundled model ready at:', this.modelUri);

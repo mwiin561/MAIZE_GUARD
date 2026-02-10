@@ -1,15 +1,17 @@
 import React, { useContext, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, TouchableWithoutFeedback, ImageBackground } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { syncScans, uploadScanImage } from '../api/client';
+import { syncScans, uploadScanImage, API_URL } from '../api/client';
 
 const { width } = Dimensions.get('window');
 
 import { LinearGradient } from 'expo-linear-gradient';
+
+const SERVER_URL = API_URL.replace('/api', '');
 
 const HomeScreen = ({ navigation }) => {
   const { userInfo, logout } = useContext(AuthContext);
@@ -22,7 +24,12 @@ const HomeScreen = ({ navigation }) => {
     try {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (stored) {
-        const data = JSON.parse(stored);
+        let data = JSON.parse(stored);
+        
+        // Note: We used to clean up blob URLs here, but that prevented valid 
+        // current-session blobs from showing if Base64 conversion failed.
+        // We now rely on the Image onError handler to show placeholders for broken links.
+
         setHistory(data);
         
         // Calculate stats
@@ -139,15 +146,29 @@ const HomeScreen = ({ navigation }) => {
     const [imageError, setImageError] = useState(false);
     const isIssue = item.diagnosis === 'Maize Streak Virus';
     
+    // Resolve Image Source
+    let imageSource = null;
+    if (item.image && !item.image.startsWith('blob:')) {
+        imageSource = { uri: item.image };
+    } else if (item.remoteImage) {
+        const uri = item.remoteImage.startsWith('http') 
+            ? item.remoteImage 
+            : `${SERVER_URL}${item.remoteImage}`;
+        imageSource = { uri };
+    }
+    
     return (
-      <TouchableOpacity style={styles.recentItem}>
-        {imageError ? (
+      <TouchableOpacity 
+        style={styles.recentItem}
+        // onPress={() => navigation.navigate('Result', { scan: item })} // Disabled until Result screen is ready
+      >
+        {imageError || !imageSource ? (
             <View style={[styles.recentImage, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]}>
                 <Ionicons name="image-outline" size={24} color="#ccc" />
             </View>
         ) : (
             <Image 
-                source={{ uri: item.image }} 
+                source={imageSource} 
                 style={styles.recentImage} 
                 onError={() => setImageError(true)}
             />
@@ -172,24 +193,11 @@ const HomeScreen = ({ navigation }) => {
     <View>
       {/* Hero Section */}
       <View style={styles.heroContainer}>
-        <LinearGradient
-          colors={['#1b5e20', '#2e7d32', '#43a047']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <Image
+          source={require('../../assets/hero-banner.jpg')}
           style={styles.heroBackground}
-        >
-            {/* Overlay Leaf Accents - simulated with absolute positioned views or icons for now since we don't have assets */}
-            <View style={styles.leafAccentRight} />
-            <View style={styles.leafAccentLeft} />
-        </LinearGradient>
-        <View style={styles.heroContent}>
-            <View style={styles.brandHeader}>
-                <Ionicons name="leaf" size={16} color="#fff" />
-                <Text style={styles.brandText}>MAIZE GUARD</Text>
-            </View>
-            <Text style={styles.heroTitle}>Instant{'\n'}Diagnosis</Text>
-            <Text style={styles.heroSubtitle}>Keep your crops healthy and productive</Text>
-        </View>
+          resizeMode="contain"
+        />
       </View>
 
       {/* Quick Scan Card */}
@@ -372,7 +380,7 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 0,
     overflow: 'hidden',
-    backgroundColor: '#1b5e20',
+    backgroundColor: '#fffff0', // Match image background (ivory/cream)
   },
   modalOverlay: {
     flex: 1,

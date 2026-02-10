@@ -2,10 +2,15 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { Platform } from 'react-native';
+
 // For Android Emulator, use 10.0.2.2
 // For Physical Device, use your machine's LAN IP (e.g., 192.168.1.X)
 // For Web, localhost is fine
-const BASE_URL = 'http://10.0.2.2:5001/api'; 
+const BASE_URL = Platform.OS === 'web' 
+  ? 'http://localhost:5001/api' 
+  : 'http://10.0.2.2:5001/api'; 
+
 
 export const API_URL = BASE_URL;
 
@@ -42,6 +47,48 @@ export const registerUser = async (name, email, password, region, farmSize) => {
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.msg || 'Registration failed');
+    }
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getUserProfile = async (token) => {
+  try {
+    const response = await fetch(`${BASE_URL}/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.msg || 'Failed to fetch profile');
+    }
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateUserProfile = async (profileData) => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const response = await fetch(`${BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.msg || 'Failed to update profile');
     }
     return data;
   } catch (error) {
@@ -96,11 +143,18 @@ export const syncScans = async (scans) => {
 export const uploadScanImage = async (imageUri) => {
   try {
     const formData = new FormData();
-    formData.append('image', {
-      uri: imageUri,
-      type: 'image/jpeg',
-      name: 'scan.jpg',
-    });
+    
+    if (Platform.OS === 'web' && imageUri.startsWith('data:')) {
+        // Convert Base64 to Blob for Web Upload
+        const blob = await (await fetch(imageUri)).blob();
+        formData.append('image', blob, 'scan.jpg');
+    } else {
+        formData.append('image', {
+          uri: imageUri,
+          type: 'image/jpeg',
+          name: 'scan.jpg',
+        });
+    }
 
     const response = await fetch(`${BASE_URL}/scans/upload-image`, {
       method: 'POST',

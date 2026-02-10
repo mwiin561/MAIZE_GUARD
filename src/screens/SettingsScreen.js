@@ -1,22 +1,119 @@
-import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
+import { uploadScanImage, syncScans } from '../api/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 const SettingsScreen = ({ navigation }) => {
   const { logout, userInfo } = useContext(AuthContext);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const SettingItem = ({ icon, title, subtitle, hasSwitch, onPress }) => (
-    <TouchableOpacity style={styles.item} onPress={onPress || (title === 'Log Out' ? logout : null)}>
+  const handleExportHistory = async () => {
+    try {
+      setIsExporting(true);
+      const stored = await AsyncStorage.getItem('diagnosisHistory');
+      
+      if (!stored) {
+        Alert.alert('No History', 'There are no scan records to export.');
+        setIsExporting(false);
+        return;
+      }
+
+      let history = JSON.parse(stored);
+      if (history.length === 0) {
+        Alert.alert('No History', 'There are no scan records to export.');
+        setIsExporting(false);
+        return;
+      }
+
+      // Prepare data for sync
+      let itemsToSync = [];
+      let updatedHistory = [...history];
+      let successCount = 0;
+
+      for (let i = 0; i < updatedHistory.length; i++) {
+        const item = updatedHistory[i];
+        let remoteUrl = item.remoteImage;
+
+        try {
+            // 1. Upload Image if needed
+            if (!remoteUrl && item.image) {
+                // If it's a local file URI
+                const uploadRes = await uploadScanImage(item.image);
+                remoteUrl = uploadRes.imageUrl;
+                updatedHistory[i].remoteImage = remoteUrl; // Update local record
+            }
+
+            // 2. Prepare Scan Data Object
+            const scanData = {
+                localId: item.id,
+                timestamp: item.date, // Use the stored date
+                imageMetadata: {
+                  resolution: 'Unknown', 
+                  orientation: 'Portrait'
+                },
+                location: item.location || {},
+                environment: {
+                    leafhopperObserved: item.leafhopperObserved || 'Not Sure'
+                },
+                diagnosis: {
+                  modelPrediction: item.diagnosis, 
+                  confidence: parseFloat(item.confidence || 0),
+                  userVerified: true,
+                  finalDiagnosis: item.diagnosis
+                },
+                imageUrl: remoteUrl
+            };
+            
+            itemsToSync.push(scanData);
+            successCount++;
+
+        } catch (err) {
+            console.log(`Failed to prepare item ${item.id}:`, err);
+            // Continue with other items
+        }
+      }
+
+      if (itemsToSync.length > 0) {
+        // Send batch to backend
+        await syncScans(itemsToSync);
+        
+        // Update local storage with new remote URLs
+        await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
+        
+        Alert.alert('Success', `Successfully exported ${itemsToSync.length} records to the database.`);
+      } else {
+        Alert.alert('Info', 'No valid records could be prepared for export.');
+      }
+
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Export Failed', 'An error occurred while exporting data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const SettingItem = ({ icon, title, subtitle, hasSwitch, onPress, loading }) => (
+    <TouchableOpacity 
+        style={[styles.item, loading && { opacity: 0.7 }]} 
+        onPress={onPress || (title === 'Log Out' ? logout : null)}
+        disabled={loading}
+    >
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={24} color="#555" />
+        {loading ? (
+            <ActivityIndicator size="small" color="#555" />
+        ) : (
+            <Ionicons name={icon} size={24} color="#555" />
+        )}
       </View>
       <View style={styles.itemContent}>
         <Text style={styles.itemTitle}>{title}</Text>
         {subtitle && <Text style={styles.itemSubtitle}>{subtitle}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#ccc" />
+      {!loading && <Ionicons name="chevron-forward" size={20} color="#ccc" />}
     </TouchableOpacity>
   );
 
@@ -44,13 +141,11 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>General</Text>
             <View style={styles.card}>
                 <SettingItem 
-                    icon="download-outline" 
-                    title="Offline Database" 
-                    subtitle="Last synced: 2 hours ago" 
-                    onPress={() => navigation.navigate('OfflineDatabase')}
+                    icon="document-text-outline" 
+                    title="Export Scan History" 
+                    onPress={handleExportHistory}
+                    loading={isExporting}
                 />
-
-                <SettingItem icon="document-text-outline" title="Export Scan History" />
             </View>
         </View>
 

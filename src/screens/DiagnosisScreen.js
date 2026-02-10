@@ -25,14 +25,19 @@ const DiagnosisScreen = ({ navigation }) => {
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Permission to access location was denied');
-        return;
-      }
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Permission to access location was denied');
+          return;
+        }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
+        let location = await Location.getCurrentPositionAsync({});
+        setLocation(location);
+      } catch (error) {
+        console.log('Error fetching location:', error);
+        // Fallback or just ignore, so it doesn't crash
+      }
     })();
   }, []);
 
@@ -251,6 +256,26 @@ const DiagnosisScreen = ({ navigation }) => {
 
   const saveToHistory = async (newDiagnosis) => {
     try {
+      // Fix for Web: Convert Blob URL to Base64 for persistence
+      // Blob URLs are revoked on page reload, so we must store the actual image data
+      if (Platform.OS === 'web' && newDiagnosis.image && newDiagnosis.image.startsWith('blob:')) {
+          try {
+              console.log('Converting Blob to Base64 for storage...');
+              const response = await fetch(newDiagnosis.image);
+              const blob = await response.blob();
+              const base64 = await new Promise((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+              });
+              newDiagnosis.image = base64;
+              console.log('Conversion successful');
+          } catch (err) {
+              console.log('Failed to convert blob to base64', err);
+          }
+      }
+
       const existingHistory = await AsyncStorage.getItem('diagnosisHistory');
       const history = existingHistory ? JSON.parse(existingHistory) : [];
       history.unshift(newDiagnosis);

@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 1. Main Backend API
+  api:
+    build: ./backend
+    container_name: maizeguard-backend
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - PORT=5001
+      - MONGO_URI=mongodb://mongo:27017/maizeguard
+      - JWT_SECRET=your_jwt_secret_key
+    depends_on:
+      - mongo
+    restart: always
+
+  # 2. Database
+  mongo:
+    image: mongo:latest
+    container_name: maizeguard-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+
+  # 3. MCP Server (AI Bridge)
+  mcp:
+    build: ./mcp-server
+    container_name: maizeguard-mcp
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MONGO_URI=mongodb://mongo:27017/maizeguard
+    depends_on:
+      - mongo
+    restart: always
+
+volumes:
+  mongo-data:
