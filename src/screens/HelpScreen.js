@@ -11,18 +11,6 @@ const HelpScreen = ({ navigation }) => {
       description: 'Read the PDF-style manual for all features.',
       image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80',
     },
-    {
-      id: '2',
-      title: 'Disease Identification Handbook',
-      description: 'Pre-loaded visuals for maize crop diagnosis.',
-      image: 'https://images.unsplash.com/photo-1595855799307-557340643734?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80',
-    },
-    {
-      id: '3',
-      title: 'Safe Pesticide Use',
-      description: 'Offline text instructions for safe application.',
-      image: 'https://images.unsplash.com/photo-1623945203378-01725c8d6265?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80',
-    },
   ];
 
   const localSupport = [
