@@ -20,9 +20,9 @@ export const AuthProvider = ({ children }) => {
   // IMPORTANT: You must replace these Client IDs with your own from Google Cloud Console
   // https://console.cloud.google.com/apis/credentials
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
-    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
-    webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+    androidClientId: 'PASTE_ANDROID_ID_HERE.apps.googleusercontent.com',
+    iosClientId: 'PASTE_IOS_ID_HERE.apps.googleusercontent.com',
+    webClientId: '747089128906-vtlv4op6bf8l8k120slqk4a2s889n93j.apps.googleusercontent.com',
   });
 
   useEffect(() => {
