@@ -396,14 +396,12 @@ const DiagnosisScreen = ({ navigation }) => {
 
 
 
-          <TouchableOpacity style={styles.saveJournalButton}>
-            <Text style={styles.saveJournalText}>Save Result to Journal</Text>
-          </TouchableOpacity>
-
+ 
           {/* Long-term Prevention */}
           <View style={[styles.actionCard, styles.preventionCard]}>
              <View style={styles.cardHeaderRow}>
               <Ionicons name="shield-checkmark" size={24} color="#4CAF50" style={{ marginRight: 10 }} />
+              <Text style={styles.cardTitle}>Long-term Prevention</Text>
               <Text style={styles.cardTitle}>Long-term Prevention</Text>
             </View>
             <View style={styles.cardContentRow}>
@@ -684,20 +682,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  saveJournalButton: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#52d017',
-  },
-  saveJournalText: {
-    color: '#52d017',
-    fontSize: 16,
-    fontFamily: 'Roboto_700Bold',
-  },
   
   // Camera & Preview Styles (Preserved)
   permButton: {
