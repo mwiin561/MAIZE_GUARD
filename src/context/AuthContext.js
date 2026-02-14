@@ -23,9 +23,12 @@ export const AuthProvider = ({ children }) => {
     androidClientId: 'PASTE_ANDROID_ID_HERE.apps.googleusercontent.com',
     iosClientId: 'PASTE_IOS_ID_HERE.apps.googleusercontent.com',
     webClientId: '747089128906-vtlv4op6bf8l8k120slqk4a2s889n93j.apps.googleusercontent.com',
+  }, {
+    native: 'maizeguard://',
   });
 
   useEffect(() => {
+    console.log('Auth response:', response);
     if (response?.type === 'success') {
       const { authentication } = response;
       handleGoogleSignIn(authentication.accessToken);
