@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, Platform, Modal, TouchableWithoutFeedback, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -12,6 +12,8 @@ const AccountScreen = ({ navigation }) => {
   const [farmSize, setFarmSize] = useState(userInfo?.farmSize || '');
   
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     if (userInfo) {
@@ -30,6 +32,8 @@ const AccountScreen = ({ navigation }) => {
             farmSize
         });
         Alert.alert('Success', 'Profile updated successfully');
+        setIsEditing(false);
+        setMenuVisible(false);
     } catch (e) {
         Alert.alert('Error', 'Failed to update profile');
     } finally {
@@ -37,16 +41,55 @@ const AccountScreen = ({ navigation }) => {
     }
   };
 
+  const handleDiscard = () => {
+    setName(userInfo?.name || '');
+    setRegion(userInfo?.region || '');
+    setFarmSize(userInfo?.farmSize || '');
+    setIsEditing(false);
+    setMenuVisible(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Account & Farm Profile</Text>
-        <View style={{ width: 32 }} /> 
+        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerButton}>
+          <Ionicons name="ellipsis-vertical" size={22} color="#000" />
+        </TouchableOpacity>
       </View>
+
+      <Modal visible={menuVisible} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+          <View style={styles.menuOverlay}>
+            <View style={styles.menuContainer}>
+              {!isEditing ? (
+                <TouchableOpacity style={styles.menuItem} onPress={() => { setIsEditing(true); setMenuVisible(false); }}>
+                  <Ionicons name="create-outline" size={20} color="#333" />
+                  <Text style={styles.menuText}>Edit Info</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.menuItem} onPress={handleSave} disabled={isSaving}>
+                    {isSaving ? (
+                      <ActivityIndicator size="small" />
+                    ) : (
+                      <Ionicons name="save-outline" size={20} color="#333" />
+                    )}
+                    <Text style={styles.menuText}>Save Changes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={handleDiscard}>
+                    <Ionicons name="close-circle-outline" size={20} color="#d32f2f" />
+                    <Text style={[styles.menuText, { color: '#d32f2f' }]}>Discard</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.titleSection}>
@@ -56,7 +99,6 @@ const AccountScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {/* Email Field (Read-only) */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>Email Address</Text>
           <View style={[styles.input, { backgroundColor: '#f0f0f0', justifyContent: 'center' }]}>
@@ -64,7 +106,6 @@ const AccountScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Name Field */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>Full Name</Text>
           <TextInput
@@ -73,10 +114,10 @@ const AccountScreen = ({ navigation }) => {
             placeholderTextColor="#999"
             value={name}
             onChangeText={setName}
+            editable={isEditing}
           />
         </View>
 
-        {/* Region Field */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>Region / Location</Text>
           <TextInput
@@ -85,10 +126,10 @@ const AccountScreen = ({ navigation }) => {
             placeholderTextColor="#999"
             value={region}
             onChangeText={setRegion}
+            editable={isEditing}
           />
         </View>
 
-        {/* Farm Size Field */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>Farm Size (Acres)</Text>
           <TextInput
@@ -98,26 +139,11 @@ const AccountScreen = ({ navigation }) => {
             keyboardType="numeric"
             value={farmSize}
             onChangeText={setFarmSize}
+            editable={isEditing}
           />
         </View>
 
         <View style={{ height: 20 }} />
-
-        {/* Save Button */}
-        <TouchableOpacity 
-            style={[styles.saveButton, isSaving && { opacity: 0.7 }]} 
-            onPress={handleSave}
-            disabled={isSaving}
-        >
-          {isSaving ? (
-              <ActivityIndicator color="#fff" />
-          ) : (
-              <>
-                  <Ionicons name="save-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
-              </>
-          )}
-        </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -147,6 +173,37 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
     marginLeft: -8,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  menuContainer: {
+    marginTop: 60,
+    marginRight: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 8,
+    width: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  menuText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#333',
+    fontFamily: 'Roboto_500Medium',
   },
   scrollContent: {
     padding: 24,
@@ -185,24 +242,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#fafafa',
-  },
-  saveButton: {
-    height: 56,
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveButtonText: {
-    fontSize: 18,
-    fontFamily: 'Roboto_700Bold',
-    color: '#fff',
   },
 });
 
