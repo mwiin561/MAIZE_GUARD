@@ -15,6 +15,29 @@ const AccountScreen = ({ navigation }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
 
+  const hasUnsavedChanges = () => {
+    return isEditing && (
+      (userInfo?.name || '') !== name ||
+      (userInfo?.region || '') !== region ||
+      (userInfo?.farmSize || '') !== farmSize
+    );
+  };
+
+  const onBackPress = () => {
+    if (hasUnsavedChanges()) {
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved changes.',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        ]
+      );
+      return;
+    }
+    navigation.goBack();
+  };
+
   useEffect(() => {
     if (userInfo) {
       setName(userInfo.name || '');
@@ -22,6 +45,22 @@ const AccountScreen = ({ navigation }) => {
       setFarmSize(userInfo.farmSize || '');
     }
   }, [userInfo]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!hasUnsavedChanges()) return;
+      e.preventDefault();
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved changes.',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        ]
+      );
+    });
+    return unsubscribe;
+  }, [navigation, isEditing, name, region, farmSize, userInfo]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -52,7 +91,7 @@ const AccountScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+        <TouchableOpacity onPress={onBackPress} style={styles.headerButton}>
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Account & Farm Profile</Text>
@@ -71,20 +110,10 @@ const AccountScreen = ({ navigation }) => {
                   <Text style={styles.menuText}>Edit Info</Text>
                 </TouchableOpacity>
               ) : (
-                <>
-                  <TouchableOpacity style={styles.menuItem} onPress={handleSave} disabled={isSaving}>
-                    {isSaving ? (
-                      <ActivityIndicator size="small" />
-                    ) : (
-                      <Ionicons name="save-outline" size={20} color="#333" />
-                    )}
-                    <Text style={styles.menuText}>Save Changes</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.menuItem} onPress={handleDiscard}>
-                    <Ionicons name="close-circle-outline" size={20} color="#d32f2f" />
-                    <Text style={[styles.menuText, { color: '#d32f2f' }]}>Discard</Text>
-                  </TouchableOpacity>
-                </>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDiscard}>
+                  <Ionicons name="close-circle-outline" size={20} color="#d32f2f" />
+                  <Text style={[styles.menuText, { color: '#d32f2f' }]}>Discard</Text>
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -144,6 +173,23 @@ const AccountScreen = ({ navigation }) => {
         </View>
 
         <View style={{ height: 20 }} />
+
+        {isEditing && (
+          <TouchableOpacity 
+            style={[styles.saveButton, isSaving && { opacity: 0.7 }]} 
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -242,6 +288,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#fafafa',
+  },
+  saveButton: {
+    height: 56,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonText: {
+    fontSize: 18,
+    fontFamily: 'Roboto_700Bold',
+    color: '#fff',
   },
 });
 
