@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -16,11 +16,8 @@ const DiagnosisScreen = ({ navigation }) => {
   const [image, setImage] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
-  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
-  const [userCorrection, setUserCorrection] = useState('');
   const [remoteImageUrl, setRemoteImageUrl] = useState(null); // URL from backend
   const [location, setLocation] = useState(null);
-  const [leafhopperObserved, setLeafhopperObserved] = useState('Not Sure');
   const cameraRef = useRef(null);
 
   useEffect(() => {
@@ -41,10 +38,7 @@ const DiagnosisScreen = ({ navigation }) => {
     })();
   }, []);
 
-  const diseases = [
-    'Maize Streak Virus',
-    'Healthy'
-  ];
+  
 
   if (!permission) {
     return <View />;
@@ -178,10 +172,46 @@ const DiagnosisScreen = ({ navigation }) => {
       };
 
       setResult(diagnosisResult);
+      let historyItem = {
+        ...diagnosisResult,
+        userVerified: true,
+        synced: false,
+        leafhopperObserved: 'Not Sure',
+        location: location ? {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        } : null
+      };
+      if (remoteImageUrl) {
+        try {
+          const scanData = {
+            localId: diagnosisResult.id,
+            imageMetadata: {
+              resolution: 'Unknown', 
+              orientation: 'Portrait'
+            },
+            location: location ? {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude
+            } : null,
+            environment: {
+              leafhopperObserved: 'Not Sure'
+            },
+            diagnosis: {
+              modelPrediction: diagnosisResult.diagnosis, 
+              confidence: parseFloat(diagnosisResult.confidence),
+              userVerified: true,
+              finalDiagnosis: diagnosisResult.diagnosis
+            },
+            imageUrl: remoteImageUrl
+          };
+          await saveScan(scanData);
+          historyItem.synced = true;
+        } catch (e) {
+        }
+      }
+      await saveToHistory(historyItem);
       setAnalyzing(false);
-      
-      // Auto-save is deferred until verification
-      // await saveToHistory(diagnosisResult);
 
     } catch (e) {
       console.error('Analysis failed:', e);
@@ -277,8 +307,15 @@ const DiagnosisScreen = ({ navigation }) => {
       }
 
       const existingHistory = await AsyncStorage.getItem('diagnosisHistory');
-      const history = existingHistory ? JSON.parse(existingHistory) : [];
-      history.unshift(newDiagnosis);
+      let history = existingHistory ? JSON.parse(existingHistory) : [];
+      
+      // Upsert by id to avoid duplicates when verification updates the pending draft
+      const idx = history.findIndex(h => h.id === newDiagnosis.id);
+      if (idx !== -1) {
+        history[idx] = { ...history[idx], ...newDiagnosis };
+      } else {
+        history.unshift(newDiagnosis);
+      }
       await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(history));
     } catch (e) {
       console.log('Error saving history', e);
@@ -288,7 +325,6 @@ const DiagnosisScreen = ({ navigation }) => {
   const reset = () => {
     setImage(null);
     setResult(null);
-    setLeafhopperObserved('Not Sure');
   };
 
   if (result) {
@@ -318,121 +354,11 @@ const DiagnosisScreen = ({ navigation }) => {
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>
               <Text style={styles.description}>{result.description}</Text>
-
-              {/* Feedback Section */}
-              <View style={{ marginBottom: 16, padding: 10, backgroundColor: '#f0f9f0', borderRadius: 8 }}>
-                 
-                 {/* Leaf Hopper Query */}
-                 <View style={{ marginBottom: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
-                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#2c3e50' }}>Did you see any leafhoppers?</Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-                        {['Yes', 'No', 'Not Sure'].map((option) => (
-                            <TouchableOpacity 
-                                key={option}
-                                onPress={() => setLeafhopperObserved(option)}
-                                style={{
-                                    paddingVertical: 6,
-                                    paddingHorizontal: 12,
-                                    borderRadius: 20,
-                                    backgroundColor: leafhopperObserved === option ? '#4CAF50' : '#e0e0e0',
-                                }}
-                            >
-                                <Text style={{ 
-                                    color: leafhopperObserved === option ? '#fff' : '#333',
-                                    fontWeight: '500'
-                                }}>{option}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                 </View>
-
-                 <Text style={{ fontWeight: '600', marginBottom: 10, color: '#2c3e50' }}>Is this diagnosis correct?</Text>
-                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <TouchableOpacity 
-                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#2ecc71', padding: 8, borderRadius: 5, flex: 1, marginRight: 5, justifyContent: 'center' }}
-                      onPress={() => handleVerification(true)}
-                    >
-                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      <Text style={{ color: '#fff', marginLeft: 5, fontWeight: '600' }}>Yes</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#e74c3c', padding: 8, borderRadius: 5, flex: 1, marginLeft: 5, justifyContent: 'center' }}
-                      onPress={() => setShowCorrectionModal(true)}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#fff" />
-                      <Text style={{ color: '#fff', marginLeft: 5, fontWeight: '600' }}>No</Text>
-                    </TouchableOpacity>
-                 </View>
-              </View>
               
-              <TouchableOpacity style={styles.galleryButton}>
-                <Ionicons name="images-outline" size={20} color="#4CAF50" style={{ marginRight: 8 }} />
-                <Text style={styles.galleryButtonText}>View Comparison Gallery</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.sectionHeader}>Recommended Actions</Text>
-
-          {/* Immediate Actions */}
-          <View style={[styles.actionCard, styles.immediateCard]}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="warning" size={24} color="#D32F2F" style={{ marginRight: 10 }} />
-              <Text style={styles.cardTitle}>Immediate Actions</Text>
-            </View>
-            <View style={styles.cardContentRow}>
-                <View style={{ flex: 1 }}>
-                    {result.immediateActions.map((action, index) => (
-                        <View key={index} style={styles.bulletRow}>
-                            <Text style={styles.bulletPoint}>•</Text>
-                            <Text style={styles.bulletText}>{action}</Text>
-                        </View>
-                    ))}
-                </View>
-                {/* Placeholder for small side image if needed, or omitted for simplicity */}
-            </View>
-          </View>
-
-
-
- 
-          {/* Long-term Prevention */}
-          <View style={[styles.actionCard, styles.preventionCard]}>
-             <View style={styles.cardHeaderRow}>
-              <Ionicons name="shield-checkmark" size={24} color="#4CAF50" style={{ marginRight: 10 }} />
-              <Text style={styles.cardTitle}>Long-term Prevention</Text>
-              <Text style={styles.cardTitle}>Long-term Prevention</Text>
-            </View>
-            <View style={styles.cardContentRow}>
-                 <View style={{ flex: 1 }}>
-                    {result.longTermPrevention.map((action, index) => (
-                        <View key={index} style={styles.bulletRow}>
-                            <Text style={[styles.bulletPoint, { color: '#4CAF50' }]}>•</Text>
-                            <Text style={styles.bulletText}>{action}</Text>
-                        </View>
-                    ))}
-                 </View>
-                 {/* Placeholder for side image */}
-                 <View style={styles.sideImagePlaceholder}>
-                     <Ionicons name="leaf" size={30} color="#81C784" />
-                 </View>
-            </View>
-          </View>
-
-          {/* Chemical Control */}
-          <View style={[styles.actionCard, styles.chemicalCard]}>
-             <View style={styles.cardHeaderRow}>
-              <Ionicons name="flask" size={24} color="#A1887F" style={{ marginRight: 10 }} />
-              <Text style={styles.cardTitle}>Chemical Control</Text>
-            </View>
-             <View style={styles.cardContentRow}>
-                <Text style={[styles.bulletText, { flex: 1 }]}>{result.chemicalControl}</Text>
-                <View style={styles.sideImagePlaceholder}>
-                     <Ionicons name="water" size={30} color="#FFCC80" />
-                 </View>
-             </View>
-          </View>
+          
 
           {/* New Diagnosis Button at bottom */}
           <TouchableOpacity style={[styles.button, styles.secondaryButton, { marginTop: 20 }]} onPress={reset}>
@@ -440,35 +366,7 @@ const DiagnosisScreen = ({ navigation }) => {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Correction Modal */}
-        <Modal
-          visible={showCorrectionModal}
-          transparent={true}
-          animationType="slide"
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>What is the correct diagnosis?</Text>
-              <ScrollView style={{ maxHeight: 300 }}>
-                {diseases.map((d) => (
-                  <TouchableOpacity 
-                    key={d} 
-                    style={styles.diseaseOption}
-                    onPress={() => handleVerification(false, d)}
-                  >
-                    <Text style={styles.diseaseText}>{d}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => setShowCorrectionModal(false)}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+        
 
       </SafeAreaView>
     );

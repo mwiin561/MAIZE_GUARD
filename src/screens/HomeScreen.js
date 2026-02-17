@@ -12,6 +12,7 @@ const { width } = Dimensions.get('window');
 import { LinearGradient } from 'expo-linear-gradient';
 
 const SERVER_URL = API_URL.replace('/api', '');
+const HERO_IMAGE_URL = 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1600&q=80';
 
 const HomeScreen = ({ navigation }) => {
   const { userInfo, logout } = useContext(AuthContext);
@@ -19,6 +20,7 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({ total: 0, issues: 0 });
   const [profileMenuVisible, setProfileMenuVisible] = useState(false);
+  const [heroError, setHeroError] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -145,6 +147,7 @@ const HomeScreen = ({ navigation }) => {
   const RecentScanItem = ({ item }) => {
     const [imageError, setImageError] = useState(false);
     const isIssue = item.diagnosis === 'Maize Streak Virus';
+    const isPending = item.userVerified !== true;
     
     // Resolve Image Source
     let imageSource = null;
@@ -177,11 +180,17 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.recentTitle}>{item.diagnosis}</Text>
           <Text style={styles.recentDate}>{new Date(item.date).toLocaleDateString()}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: isIssue ? '#ffebee' : '#e8f5e9' }]}>
-            <Text style={[styles.statusText, { color: isIssue ? '#c62828' : '#2e7d32' }]}>
-                {isIssue ? 'Action Req' : 'Optimal'}
-            </Text>
-        </View>
+        {isPending ? (
+          <View style={[styles.statusBadge, { backgroundColor: '#e3f2fd' }]}>
+            <Text style={[styles.statusText, { color: '#1e88e5' }]}>Pending</Text>
+          </View>
+        ) : (
+          <View style={[styles.statusBadge, { backgroundColor: isIssue ? '#ffebee' : '#e8f5e9' }]}>
+              <Text style={[styles.statusText, { color: isIssue ? '#c62828' : '#2e7d32' }]}>
+                  {isIssue ? 'Action Req' : 'Optimal'}
+              </Text>
+          </View>
+        )}
         <Ionicons name="chevron-forward" size={20} color="#ccc" />
       </TouchableOpacity>
     );
@@ -193,11 +202,25 @@ const HomeScreen = ({ navigation }) => {
     <View>
       {/* Hero Section */}
       <View style={styles.heroContainer}>
-        <Image
-          source={require('../../assets/hero-banner.jpg')}
+        <ImageBackground
+          source={
+            heroError
+              ? require('../../assets/hero-banner.jpg')
+              : { uri: HERO_IMAGE_URL }
+          }
           style={styles.heroBackground}
-          resizeMode="contain"
-        />
+          resizeMode="cover"
+          onError={() => setHeroError(true)}
+        >
+          <LinearGradient
+            colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.25)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroContent}>
+            <Text style={styles.heroTitle}>Instant Diagnosis</Text>
+            <Text style={styles.heroSubtitle}>Point, scan, and get results fast</Text>
+          </View>
+        </ImageBackground>
       </View>
 
       {/* Quick Scan Card */}
@@ -243,6 +266,21 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.viewAllText}>View All</Text>
         </TouchableOpacity>
       </View>
+      {history.length === 0 && (
+        <View style={styles.emptyInlineCard}>
+          <Ionicons name="albums-outline" size={24} color="#4CAF50" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.emptyInlineTitle}>No recent scans</Text>
+            <Text style={styles.emptyInlineText}>Run a scan and confirm the result to see it here.</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.inlineScanButton}
+            onPress={() => navigation.navigate('Diagnosis')}
+          >
+            <Text style={styles.inlineScanButtonText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -456,6 +494,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Roboto_700Bold',
     opacity: 0.9,
+    letterSpacing: 0.2,
   },
   // Simulated organic shapes for "leaves" if no image
   leafAccentRight: {
@@ -568,6 +607,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Roboto_700Bold',
     color: '#333',
+  },
+  emptyInlineCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  emptyInlineTitle: {
+    fontSize: 16,
+    fontFamily: 'Roboto_700Bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  emptyInlineText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Roboto_400Regular',
+  },
+  inlineScanButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  inlineScanButtonText: {
+    color: '#fff',
+    fontFamily: 'Roboto_700Bold',
+    fontSize: 14,
   },
   viewAllText: {
     color: '#4CAF50',

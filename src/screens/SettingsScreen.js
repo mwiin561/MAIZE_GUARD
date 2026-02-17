@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TouchableWithoutFeedback, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
@@ -9,6 +9,25 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 const SettingsScreen = ({ navigation }) => {
   const { logout, userInfo } = useContext(AuthContext);
   const [isExporting, setIsExporting] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewItems, setPreviewItems] = useState([]);
+
+  const openExportPreview = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('diagnosisHistory');
+      if (!stored) {
+        setPreviewItems([]);
+        setPreviewVisible(true);
+        return;
+      }
+      let history = JSON.parse(stored);
+      setPreviewItems(history.slice(0, 20));
+      setPreviewVisible(true);
+    } catch (e) {
+      setPreviewItems([]);
+      setPreviewVisible(true);
+    }
+  };
 
   const handleExportHistory = async () => {
     try {
@@ -143,7 +162,7 @@ const SettingsScreen = ({ navigation }) => {
                 <SettingItem 
                     icon="document-text-outline" 
                     title="Export Scan History" 
-                    onPress={handleExportHistory}
+                    onPress={openExportPreview}
                     loading={isExporting}
                 />
             </View>
@@ -161,6 +180,72 @@ const SettingsScreen = ({ navigation }) => {
             </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={previewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setPreviewVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Export Scan History</Text>
+                  <TouchableOpacity onPress={() => setPreviewVisible(false)} style={styles.modalClose}>
+                    <Ionicons name="close" size={22} color="#666" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  {previewItems.length > 0 ? `${previewItems.length} records ready` : 'No records found'}
+                </Text>
+                <View style={styles.previewList}>
+                  {previewItems.length > 0 ? (
+                    <FlatList
+                      data={previewItems}
+                      keyExtractor={(item) => item.id}
+                      showsVerticalScrollIndicator={false}
+                      renderItem={({ item }) => (
+                        <View style={styles.previewRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.previewTitle}>{item.diagnosis || 'Unknown'}</Text>
+                            <Text style={styles.previewMeta}>
+                              {new Date(item.date).toLocaleDateString()} • {Math.round((item.confidence || 0) * 100)}%
+                            </Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#bbb" />
+                        </View>
+                      )}
+                    />
+                  ) : (
+                    <View style={{ padding: 16, alignItems: 'center' }}>
+                      <Text style={styles.emptyText}>No scans to export</Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[styles.exportButton, isExporting && { opacity: 0.7 }]}
+                  onPress={handleExportHistory}
+                  disabled={isExporting || previewItems.length === 0}
+                >
+                  {isExporting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.exportButtonText}>Export to Database</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setPreviewVisible(false)}
+                >
+                  <Text style={styles.secondaryButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -250,7 +335,87 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontFamily: 'Roboto_400Regular',
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Roboto_700Bold',
+    color: '#333',
+  },
+  modalClose: {
+    padding: 6,
+  },
+  modalSubtitle: {
+    marginTop: 4,
+    color: '#666',
+    fontFamily: 'Roboto_400Regular',
+  },
+  previewList: {
+    maxHeight: 300,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  previewTitle: {
+    fontSize: 15,
+    color: '#222',
+    fontFamily: 'Roboto_700Bold',
+  },
+  previewMeta: {
+    marginTop: 2,
+    color: '#777',
+    fontSize: 12,
+    fontFamily: 'Roboto_400Regular',
+  },
+  exportButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  exportButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Roboto_700Bold',
+  },
+  secondaryButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  secondaryButtonText: {
+    color: '#333',
+    fontSize: 14,
+    fontFamily: 'Roboto_500Medium',
+  },
 });
 
 export default SettingsScreen;
