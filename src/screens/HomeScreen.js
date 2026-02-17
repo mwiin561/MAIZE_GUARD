@@ -239,24 +239,30 @@ const HomeScreen = ({ navigation }) => {
 
       {/* Stats Row */}
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="scan" size={24} color="#2e7d32" />
-            </View>
-            <View>
-                <Text style={styles.statLabel}>Total Scans</Text>
-                <Text style={styles.statValue}>{stats.total}</Text>
-            </View>
-        </View>
-        <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#fff3e0' }]}>
-                <Ionicons name="warning-outline" size={24} color="#f57c00" />
-            </View>
-            <View>
-                <Text style={styles.statLabel}>Issues Found</Text>
-                <Text style={styles.statValue}>{stats.issues}</Text>
-            </View>
-        </View>
+        <TouchableOpacity 
+          style={styles.statCard}
+          onPress={() => navigation.navigate('History', { filterType: 'all' })}
+        >
+          <View style={[styles.statIconContainer, { backgroundColor: '#e8f5e9' }]}>
+            <Ionicons name="scan" size={24} color="#2e7d32" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>Total Scans</Text>
+            <Text style={styles.statValue}>{stats.total}</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.statCard}
+          onPress={() => navigation.navigate('History', { filterType: 'issues' })}
+        >
+          <View style={[styles.statIconContainer, { backgroundColor: '#fff3e0' }]}>
+            <Ionicons name="warning-outline" size={24} color="#f57c00" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>Issues Found</Text>
+            <Text style={styles.statValue}>{stats.issues}</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Recent Scans Header */}
@@ -292,7 +298,7 @@ const HomeScreen = ({ navigation }) => {
             <Ionicons name="menu" size={28} color="#333" />
         </TouchableOpacity>
         
-        <Text style={styles.headerTitle}>MaizeHealth</Text>
+        <Text style={styles.headerTitle}>Maize Guard</Text>
 
         <TouchableOpacity 
             style={styles.profileButton}

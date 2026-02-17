@@ -39,6 +39,9 @@ const HistoryItem = ({ item }) => {
         <View style={styles.cardContent}>
           <Text style={styles.cardTitle}>{item.diagnosis}</Text>
           <Text style={styles.cardDate}>{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+          {item.userEmail && (
+            <Text style={styles.cardUser}>By {item.userEmail}</Text>
+          )}
         </View>
         <View style={[styles.statusBadge, { backgroundColor: isInfected ? '#ffebee' : '#e8f5e9' }]}>
             <Text style={[styles.statusText, { color: isInfected ? '#c62828' : '#2e7d32' }]}>
@@ -49,20 +52,20 @@ const HistoryItem = ({ item }) => {
     );
 };
 
-const HistoryScreen = ({ navigation }) => {
+const HistoryScreen = ({ navigation, route }) => {
   const [history, setHistory] = useState([]);
+  const filterType = route && route.params && route.params.filterType ? route.params.filterType : 'all';
 
   const loadHistory = async () => {
     try {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (stored) {
-        // Parse and take only the latest 20 items
         let allHistory = JSON.parse(stored);
-        
-        // Removed blob cleanup to allow valid current-session blobs to show.
-        // Image onError will handle invalid ones.
-
-        setHistory(allHistory.slice(0, 20));
+        let filtered = allHistory;
+        if (filterType === 'issues') {
+          filtered = allHistory.filter(item => item.diagnosis === 'Maize Streak Virus');
+        }
+        setHistory(filtered.slice(0, 50));
       }
     } catch (e) {
       console.log('Failed to load history');
@@ -72,7 +75,7 @@ const HistoryScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadHistory();
-    }, [])
+    }, [filterType])
   );
 
   const renderItem = ({ item }) => {

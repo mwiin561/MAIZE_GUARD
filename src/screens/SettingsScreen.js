@@ -11,9 +11,11 @@ const SettingsScreen = ({ navigation }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewItems, setPreviewItems] = useState([]);
+  const [exportStatus, setExportStatus] = useState('');
 
   const openExportPreview = async () => {
     try {
+      setExportStatus('');
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       if (!stored) {
         setPreviewItems([]);
@@ -35,6 +37,7 @@ const SettingsScreen = ({ navigation }) => {
       const stored = await AsyncStorage.getItem('diagnosisHistory');
       
       if (!stored) {
+        setExportStatus('No history found to export.');
         Alert.alert('No History', 'There are no scan records to export.');
         setIsExporting(false);
         return;
@@ -42,6 +45,7 @@ const SettingsScreen = ({ navigation }) => {
 
       let history = JSON.parse(stored);
       if (history.length === 0) {
+        setExportStatus('No history found to export.');
         Alert.alert('No History', 'There are no scan records to export.');
         setIsExporting(false);
         return;
@@ -56,60 +60,61 @@ const SettingsScreen = ({ navigation }) => {
         const item = updatedHistory[i];
         let remoteUrl = item.remoteImage;
 
-        try {
-            // 1. Upload Image if needed
-            if (!remoteUrl && item.image) {
-                // If it's a local file URI
-                const uploadRes = await uploadScanImage(item.image);
-                remoteUrl = uploadRes.imageUrl;
-                updatedHistory[i].remoteImage = remoteUrl; // Update local record
-            }
-
-            // 2. Prepare Scan Data Object
-            const scanData = {
-                localId: item.id,
-                timestamp: item.date, // Use the stored date
-                imageMetadata: {
-                  resolution: 'Unknown', 
-                  orientation: 'Portrait'
-                },
-                location: item.location || {},
-                environment: {
-                    leafhopperObserved: item.leafhopperObserved || 'Not Sure'
-                },
-                diagnosis: {
-                  modelPrediction: item.diagnosis, 
-                  confidence: parseFloat(item.confidence || 0),
-                  userVerified: true,
-                  finalDiagnosis: item.diagnosis
-                },
-                imageUrl: remoteUrl
-            };
-            
-            itemsToSync.push(scanData);
-            successCount++;
-
-        } catch (err) {
-            console.log(`Failed to prepare item ${item.id}:`, err);
-            // Continue with other items
+        if (!remoteUrl && item.image) {
+          try {
+            const uploadRes = await uploadScanImage(item.image);
+            remoteUrl = uploadRes.imageUrl;
+            updatedHistory[i].remoteImage = remoteUrl;
+          } catch (err) {
+            console.log(`Image upload failed for item ${item.id}, exporting without imageUrl:`, err);
+          }
         }
+
+        const scanData = {
+          localId: item.id,
+          timestamp: item.date,
+          imageMetadata: {
+            resolution: 'Unknown',
+            orientation: 'Portrait'
+          },
+          location: item.location || {},
+          environment: {
+            leafhopperObserved: item.leafhopperObserved || 'Not Sure'
+          },
+          diagnosis: {
+            modelPrediction: item.diagnosis,
+            confidence: parseFloat(item.confidence || 0),
+            userVerified: true,
+            finalDiagnosis: item.diagnosis
+          },
+          imageUrl: remoteUrl || null
+        };
+
+        itemsToSync.push(scanData);
+        successCount++;
       }
 
       if (itemsToSync.length > 0) {
-        // Send batch to backend
-        await syncScans(itemsToSync);
+        const response = await syncScans(itemsToSync);
         
-        // Update local storage with new remote URLs
         await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
         
-        Alert.alert('Success', `Successfully exported ${itemsToSync.length} records to the database.`);
+        const syncedCount = response && typeof response.syncedCount === 'number'
+          ? response.syncedCount
+          : itemsToSync.length;
+        const msg = `Successfully exported ${syncedCount} record${syncedCount === 1 ? '' : 's'} to the database.`;
+        setExportStatus(msg);
+        Alert.alert('Success', msg);
       } else {
+        setExportStatus('No valid records could be prepared for export.');
         Alert.alert('Info', 'No valid records could be prepared for export.');
       }
 
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('Export Failed', 'An error occurred while exporting data. Please try again.');
+      const message = error && error.message ? error.message : 'An error occurred while exporting data. Please try again.';
+      setExportStatus(`Export failed: ${message}`);
+      Alert.alert('Export Failed', message);
     } finally {
       setIsExporting(false);
     }
@@ -200,6 +205,9 @@ const SettingsScreen = ({ navigation }) => {
                 <Text style={styles.modalSubtitle}>
                   {previewItems.length > 0 ? `${previewItems.length} records ready` : 'No records found'}
                 </Text>
+                {exportStatus ? (
+                  <Text style={styles.statusText}>{exportStatus}</Text>
+                ) : null}
                 <View style={styles.previewList}>
                   {previewItems.length > 0 ? (
                     <FlatList
@@ -367,6 +375,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#666',
     fontFamily: 'Roboto_400Regular',
+  },
+  statusText: {
+    marginTop: 8,
+    color: '#333',
+    fontFamily: 'Roboto_400Regular',
+    fontSize: 13,
   },
   previewList: {
     maxHeight: 300,

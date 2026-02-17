@@ -23,7 +23,7 @@ const HelpScreen = ({ navigation }) => {
     },
     {
       id: '2',
-      title: 'Maize Health Specialist',
+      title: 'Maize Guard Specialist',
       subtitle: 'Crop Protection Bureau',
       phone: '+254 711 222 333',
       address: '45 Field Street, South Sector',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadScanImage, saveScan } from '../api/client';
 import ModelService from '../services/ModelService';
+import { AuthContext } from '../context/AuthContext';
 
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
@@ -19,6 +20,7 @@ const DiagnosisScreen = ({ navigation }) => {
   const [remoteImageUrl, setRemoteImageUrl] = useState(null); // URL from backend
   const [location, setLocation] = useState(null);
   const cameraRef = useRef(null);
+  const { userInfo } = useContext(AuthContext);
 
   useEffect(() => {
     (async () => {
@@ -180,7 +182,8 @@ const DiagnosisScreen = ({ navigation }) => {
         location: location ? {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude
-        } : null
+        } : null,
+        userEmail: userInfo && userInfo.email ? userInfo.email : null
       };
       if (remoteImageUrl) {
         try {

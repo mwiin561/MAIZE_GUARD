@@ -1,7 +1,9 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
+
+const PLANT_BG_URL = 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1200&q=80';
 
 const LoginScreen = () => {
   const [name, setName] = useState('');
@@ -37,99 +39,104 @@ const LoginScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
-        <View style={styles.header}>
-          <Image 
-            source={require('../../assets/icon.png')} 
-            style={styles.logo} 
-            resizeMode="contain"
-          />
-          <Text style={styles.subtitle}>
-            {isLogin ? 'Sign in to continue' : 'Create an account'}
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          {!isLogin && (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name"
-                value={name}
-                onChangeText={setName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Region (Optional)"
-                value={region}
-                onChangeText={setRegion}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Farm Size in Acres (Optional)"
-                value={farmSize}
-                onChangeText={setFarmSize}
-                keyboardType="numeric"
-              />
-            </>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity style={styles.button} onPress={handleAuth} disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>{isLogin ? 'Sign In' : 'Sign Up'}</Text>
+    <ImageBackground source={{ uri: PLANT_BG_URL }} style={styles.background} resizeMode="cover">
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.header}>
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={styles.logo} 
+              resizeMode="contain"
+            />
+            {!isLogin && (
+              <Text style={styles.subtitle}>Create an account</Text>
             )}
-          </TouchableOpacity>
-
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} disabled={isLoading}>
-             {/* Mock Google Icon (G) */}
-             <View style={styles.googleIconContainer}>
-               <Text style={styles.googleIconText}>G</Text>
-             </View>
-             <Text style={styles.googleButtonText}>Sign in with Google</Text>
-          </TouchableOpacity>
+          <View style={styles.form}>
+            {!isLogin && (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  value={name}
+                  onChangeText={setName}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Region (Optional)"
+                  value={region}
+                  onChangeText={setRegion}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Farm Size in Acres (Optional)"
+                  value={farmSize}
+                  onChangeText={setFarmSize}
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-          <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggleButton}>
-            <Text style={styles.toggleText}>
-              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            <TouchableOpacity style={styles.button} onPress={handleAuth} disabled={isLoading}>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>{isLogin ? 'Sign In' : 'Sign Up'}</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} disabled={isLoading}>
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleIconText}>G</Text>
+              </View>
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggleButton}>
+              <Text style={styles.toggleText}>
+                {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    backgroundColor: '#E8F5E9',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   content: {
     flex: 1,
@@ -170,7 +177,7 @@ const styles = StyleSheet.create({
     }),
   },
   button: {
-    backgroundColor: '#1a73e8', // Google Blue
+    backgroundColor: '#4CAF50',
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
@@ -225,7 +232,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleText: {
-    color: '#1a73e8',
+    color: '#4CAF50',
     fontSize: 14,
     fontFamily: 'Roboto_400Regular',
   },
