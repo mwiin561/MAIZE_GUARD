@@ -4,6 +4,7 @@ const Scan = require('../models/Scan');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
@@ -26,12 +27,52 @@ const upload = multer({
 // @access  Public (for now, or Private)
 router.post('/upload-image', upload.single('image'), (req, res) => {
   if (!req.file) {
-    return res.status(400).send('No file uploaded.');
+    return res.status(400).json({ msg: 'No file uploaded.' });
   }
-  // Return the URL
-  res.json({ 
-    imageUrl: `/public/uploads/${req.file.filename}` 
+  res.json({
+    imageUrl: `/public/uploads/${req.file.filename}`
   });
+});
+
+router.post('/upload-image-web', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const imageData = body.imageData;
+
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ msg: 'No image data provided.' });
+    }
+
+    const matches = imageData.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).json({ msg: 'Invalid image data.' });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    let extension = '.jpg';
+    if (mimeType === 'image/png') {
+      extension = '.png';
+    } else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      extension = '.jpg';
+    }
+
+    const uploadsDir = path.join(__dirname, '..', 'public', 'uploads');
+    fs.mkdirSync(uploadsDir, { recursive: true });
+
+    const filename = 'scan-' + Date.now() + extension;
+    const filePath = path.join(uploadsDir, filename);
+    await fs.promises.writeFile(filePath, buffer);
+
+    res.json({
+      imageUrl: `/public/uploads/${filename}`
+    });
+  } catch (err) {
+    console.error('upload-image-web error:', err);
+    res.status(500).json({ msg: 'Server error while saving image.' });
+  }
 });
 
 // @route   POST api/scans/sync

@@ -142,33 +142,52 @@ export const syncScans = async (scans) => {
 
 export const uploadScanImage = async (imageUri) => {
   try {
-    const formData = new FormData();
-    
-    if (Platform.OS === 'web' && imageUri.startsWith('data:')) {
-        // Convert Base64 to Blob for Web Upload
-        const blob = await (await fetch(imageUri)).blob();
-        formData.append('image', blob, 'scan.jpg');
-    } else {
-        formData.append('image', {
-          uri: imageUri,
-          type: 'image/jpeg',
-          name: 'scan.jpg',
+    if (Platform.OS === 'web') {
+      let imageData = imageUri;
+
+      if (imageData.startsWith('blob:')) {
+        const response = await fetch(imageData);
+        const blob = await response.blob();
+        imageData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
         });
-    }
+      }
 
-    const response = await fetch(`${BASE_URL}/scans/upload-image`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+      const response = await fetch(`${BASE_URL}/scans/upload-image-web`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageData }),
+      });
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.msg || 'Image upload failed');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || 'Image upload failed');
+      }
+      return data;
+    } else {
+      const formData = new FormData();
+      formData.append('image', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'scan.jpg',
+      });
+
+      const response = await fetch(`${BASE_URL}/scans/upload-image`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || 'Image upload failed');
+      }
+      return data;
     }
-    return data; // Returns { imageUrl: ... }
   } catch (error) {
     throw error;
   }
