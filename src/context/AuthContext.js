@@ -20,11 +20,10 @@ export const AuthProvider = ({ children }) => {
   // IMPORTANT: You must replace these Client IDs with your own from Google Cloud Console
   // https://console.cloud.google.com/apis/credentials
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: 'PASTE_ANDROID_ID_HERE.apps.googleusercontent.com',
-    iosClientId: 'PASTE_IOS_ID_HERE.apps.googleusercontent.com',
+ 
     webClientId: '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com',
   }, {
-    native: 'maizeguard://',
+    native: 'maizeguard://',   
   });
 
   useEffect(() => {
