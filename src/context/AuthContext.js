@@ -16,15 +16,11 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
 
-  // Google Auth Request Hook
-  // IMPORTANT: You must replace these Client IDs with your own from Google Cloud Console
-  // https://console.cloud.google.com/apis/credentials
   const [request, response, promptAsync] = Google.useAuthRequest({
- 
     webClientId: '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com',
-  }, {
-    native: 'maizeguard://',   
   });
+
+  console.log('Google redirect URI:', request?.redirectUri);
 
   useEffect(() => {
     console.log('Auth response:', response);
