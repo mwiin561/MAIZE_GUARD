@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: 'PASTE_ANDROID_ID_HERE.apps.googleusercontent.com',
     iosClientId: 'PASTE_IOS_ID_HERE.apps.googleusercontent.com',
-    webClientId: '747089128906-vtlv4op6bf8l8k120slqk4a2s889n93j.apps.googleusercontent.com',
+    webClientId: '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com',
   }, {
     native: 'maizeguard://',
   });
