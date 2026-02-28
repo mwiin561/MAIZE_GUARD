@@ -7,9 +7,7 @@ import { Platform } from 'react-native';
 // For Android Emulator, use 10.0.2.2
 // For Physical Device, use your machine's LAN IP (e.g., 192.168.1.X)
 // For Web, localhost is fine
-const BASE_URL = Platform.OS === 'web' 
-  ? 'http://localhost:5001/api' 
-  : 'http://10.0.2.2:5001/api'; 
+const BASE_URL = 'https://calm-ads-fly.loca.lt/api'; 
 
 
 export const API_URL = BASE_URL;
