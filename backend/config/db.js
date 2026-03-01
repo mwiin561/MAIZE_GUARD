@@ -3,23 +3,20 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const connectDB = async () => {
   try {
-    let uri = process.env.MONGO_URI;
+    let uri = process.env.MONGO_URI || 'mongodb+srv://MAIZE-GUARD_ADMIN-DB:5TR0NGP%4055W0RD@cluster0.d9jcjuz.mongodb.net/?appName=Cluster0';
 
-    // Check if MONGO_URI is defined
-    if (!uri) {
-        console.warn('MONGO_URI is not defined in .env file. Using In-Memory DB.');
-    } else {
-        console.log(`Attempting to connect to ${uri}...`);
+    if (uri) {
+        console.log(`Attempting to connect to MongoDB Atlas...`);
         try {
             await mongoose.connect(uri, {
               useNewUrlParser: true,
               useUnifiedTopology: true,
               serverSelectionTimeoutMS: 5000 // 5s timeout
             });
-            console.log('MongoDB Connected...');
+            console.log('MongoDB Connected to Atlas!');
             return; // Success
         } catch (err) {
-            console.warn('Failed to connect to provided MONGO_URI. Falling back to In-Memory DB...');
+            console.warn('Failed to connect to MongoDB Atlas. Falling back to In-Memory DB...');
         }
     }
 
