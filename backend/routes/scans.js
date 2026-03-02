@@ -58,8 +58,23 @@ const runInference = async (imagePath) => {
     // Adjust logic based on your model's output structure
     const msvConfidence = predictions[1]; // Index 1 for MSV
     const healthyConfidence = predictions[0]; // Index 0 for Healthy
+    
+    // Sanity Check: If the model is not very sure about either class, 
+    // or if the image doesn't "look" like a leaf based on class distribution.
+    const isVerySure = Math.max(msvConfidence, healthyConfidence) > 0.85;
+    const isAmbiguous = Math.abs(msvConfidence - healthyConfidence) < 0.2;
+
+    if (!isVerySure || isAmbiguous) {
+      return {
+        isInvalid: true,
+        diagnosis: 'Not a Maize Leaf',
+        confidence: Math.max(msvConfidence, healthyConfidence),
+        raw: Array.from(predictions)
+      };
+    }
 
     return {
+      isInvalid: false,
       isInfected: msvConfidence > 0.5,
       confidence: Math.max(msvConfidence, healthyConfidence),
       diagnosis: msvConfidence > 0.5 ? 'Maize Streak Virus' : 'Healthy',

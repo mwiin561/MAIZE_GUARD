@@ -147,9 +147,31 @@ const DiagnosisScreen = ({ navigation }) => {
          analysisResult = await runMockAnalysis();
       }
 
-      const { isInfected, confidence } = analysisResult;
+      const { isInfected, confidence, isInvalid } = analysisResult;
       
-      const diagnosisResult = {
+      // Handle Invalid Image Case
+      if (isInvalid) {
+        const invalidResult = {
+          id: Date.now().toString(),
+          date: new Date().toISOString(),
+          image: image,
+          remoteImage: remoteImageUrl,
+          title: 'Invalid Image',
+          diagnosis: 'Not a Maize Leaf',
+          confidence: confidence,
+          description: 'The uploaded image does not appear to be a maize leaf. For an accurate diagnosis, please ensure the photo is clear and focuses specifically on a single maize leaf.',
+          immediateActions: [
+            'Take a new photo in good lighting.',
+            'Ensure the leaf fills most of the frame.',
+            'Avoid blurry or dark images.'
+          ],
+          longTermPrevention: [],
+          chemicalControl: 'No action required.'
+        };
+        setResult(invalidResult);
+        setAnalyzing(false);
+        return; // Don't save invalid images to history/cloud
+      }
         id: Date.now().toString(),
         date: new Date().toISOString(),
         image: image,
