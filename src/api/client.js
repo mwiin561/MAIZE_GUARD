@@ -14,6 +14,7 @@ export const API_URL = BASE_URL;
 
 export const loginUser = async (email, password) => {
   try {
+    console.log('Attempting login to:', `${BASE_URL}/auth/login`);
     const response = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
