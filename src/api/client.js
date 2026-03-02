@@ -22,11 +22,17 @@ export const loginUser = async (email, password) => {
       body: JSON.stringify({ email, password }),
     });
     
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.msg || 'Login failed');
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || 'Login failed');
+      }
+      return data;
+    } else {
+      const text = await response.text();
+      throw new Error(`Server returned non-JSON response: ${text.substring(0, 50)}`);
     }
-    return data;
   } catch (error) {
     throw error;
   }
@@ -42,11 +48,17 @@ export const registerUser = async (name, email, password, region, farmSize) => {
       body: JSON.stringify({ name, email, password, region, farmSize }),
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.msg || 'Registration failed');
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || 'Registration failed');
+      }
+      return data;
+    } else {
+      const text = await response.text();
+      throw new Error(`Server returned non-JSON response: ${text.substring(0, 50)}`);
     }
-    return data;
   } catch (error) {
     throw error;
   }
