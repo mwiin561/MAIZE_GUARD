@@ -113,6 +113,7 @@ const DiagnosisScreen = ({ navigation }) => {
     try {
       console.log('Attempting upload and Server-Side AI analysis...');
       const uploadResult = await uploadScanImage(image);
+      console.log('Server response:', JSON.stringify(uploadResult));
       remoteImageUrl = uploadResult.imageUrl;
       serverAiResult = uploadResult.aiResult;
       if (serverAiResult) {
