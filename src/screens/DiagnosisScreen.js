@@ -106,23 +106,27 @@ const DiagnosisScreen = ({ navigation }) => {
   const analyzeImage = async () => {
     setAnalyzing(true);
     
-    // Upload Image in background (Offline First approach: We save local first, then try upload)
     let remoteImageUrl = null;
+    let serverAiResult = null;
+
+    // 1. Try to upload image and get Server-Side AI result
     try {
-      // Note: In a real app, we'd use NetInfo to check connectivity first
-      console.log('Attempting to upload image...');
+      console.log('Attempting upload and Server-Side AI analysis...');
       const uploadResult = await uploadScanImage(image);
       remoteImageUrl = uploadResult.imageUrl;
-      console.log('Image uploaded:', remoteImageUrl);
+      serverAiResult = uploadResult.aiResult;
+      if (serverAiResult) {
+        console.log('Server-Side AI analysis successful:', serverAiResult);
+      }
     } catch (e) {
-      console.log('Offline or Upload failed, saving locally only for now:', e);
+      console.log('Upload/Server AI failed, falling back to local/mock:', e);
     }
 
-    // Mock AI Analysis (Fallback if ModelService returns null)
+    // Mock AI Analysis (Fallback if all else fails)
     const runMockAnalysis = async () => {
        return new Promise((resolve) => {
          setTimeout(() => {
-            const isInfected = Math.random() > 0.4; // 60% chance of infection for demo
+            const isInfected = Math.random() > 0.4; 
             const confidence = (Math.random() * (0.99 - 0.85) + 0.85).toFixed(2);
             resolve({ isInfected, confidence });
          }, 2000);
@@ -130,10 +134,15 @@ const DiagnosisScreen = ({ navigation }) => {
     };
 
     try {
-      // 1. Try Local Offline Model
-      let analysisResult = await ModelService.predict(image);
+      let analysisResult = serverAiResult;
       
-      // 2. Fallback to Mock if Model not ready
+      // 2. If Server AI failed, try Local Offline Model
+      if (!analysisResult) {
+        console.log('Using local/mock analysis...');
+        analysisResult = await ModelService.predict(image);
+      }
+      
+      // 3. Final fallback to Mock
       if (!analysisResult) {
          analysisResult = await runMockAnalysis();
       }
