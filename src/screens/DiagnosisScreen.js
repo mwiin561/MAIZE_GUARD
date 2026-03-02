@@ -172,6 +172,8 @@ const DiagnosisScreen = ({ navigation }) => {
         setAnalyzing(false);
         return; // Don't save invalid images to history/cloud
       }
+
+      const diagnosisResult = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         image: image,

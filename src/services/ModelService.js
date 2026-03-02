@@ -61,15 +61,26 @@ class ModelService {
   }
 
   async ensureDirectoryExists() {
-    const dirInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_DIR);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(LOCAL_MODEL_DIR, { intermediates: true });
+    try {
+      const dirInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_DIR);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(LOCAL_MODEL_DIR, { intermediates: true });
+      }
+    } catch (e) {
+      // If getInfoAsync fails because it's missing, try to create it anyway
+      try {
+        await FileSystem.makeDirectoryAsync(LOCAL_MODEL_DIR, { intermediates: true });
+      } catch (err) {}
     }
   }
 
   async checkModelExists() {
-    const fileInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH);
-    return fileInfo.exists && fileInfo.size > 0;
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH);
+      return fileInfo.exists && fileInfo.size > 0;
+    } catch (e) {
+      return false;
+    }
   }
 
   async downloadModel() {
