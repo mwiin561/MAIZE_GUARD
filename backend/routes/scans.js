@@ -5,6 +5,71 @@ const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const Jimp = require('jimp');
+const tflite = require('@tensorflow/tfjs-tflite');
+const tf = require('@tensorflow/tfjs');
+
+// Load Model
+let model = null;
+const loadModel = async () => {
+  try {
+    const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
+    if (fs.existsSync(modelPath)) {
+      model = await tflite.loadTFLiteModel(modelPath);
+      console.log('AI Model loaded successfully from:', modelPath);
+    } else {
+      console.warn('AI Model file not found at:', modelPath);
+    }
+  } catch (err) {
+    console.error('Error loading AI model:', err);
+  }
+};
+loadModel();
+
+// Helper: Run Inference
+const runInference = async (imagePath) => {
+  if (!model) return null;
+
+  try {
+    const image = await Jimp.read(imagePath);
+    // Resize to 224x224 (Adjust this to match your model's input size)
+    image.cover(224, 224);
+    
+    const { data, width, height } = image.bitmap;
+    const buffer = Buffer.from(data);
+    
+    // Convert to Tensor
+    const input = tf.tidy(() => {
+      const img = tf.tensor3d(new Uint8Array(buffer), [height, width, 4]); // Jimp is RGBA
+      return img.slice([0, 0, 0], [height, width, 3]) // Remove Alpha
+                .expandDims(0)
+                .toFloat()
+                .div(255.0); // Normalize to [0, 1]
+    });
+
+    const output = model.predict(input);
+    const predictions = await output.data();
+    
+    // Cleanup
+    input.dispose();
+    output.dispose();
+
+    // Assuming labels: 0 = Healthy, 1 = Maize Streak Virus
+    // Adjust logic based on your model's output structure
+    const msvConfidence = predictions[1]; // Index 1 for MSV
+    const healthyConfidence = predictions[0]; // Index 0 for Healthy
+
+    return {
+      isInfected: msvConfidence > 0.5,
+      confidence: Math.max(msvConfidence, healthyConfidence),
+      diagnosis: msvConfidence > 0.5 ? 'Maize Streak Virus' : 'Healthy',
+      raw: Array.from(predictions)
+    };
+  } catch (err) {
+    console.error('Inference error:', err);
+    return null;
+  }
+};
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
@@ -25,12 +90,16 @@ const upload = multer({
 // @route   POST api/scans/upload-image
 // @desc    Upload an image
 // @access  Public (for now, or Private)
-router.post('/upload-image', upload.single('image'), (req, res) => {
+router.post('/upload-image', upload.single('image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ msg: 'No file uploaded.' });
   }
+
+  const aiResult = await runInference(req.file.path);
+
   res.json({
-    imageUrl: `/public/uploads/${req.file.filename}`
+    imageUrl: `/public/uploads/${req.file.filename}`,
+    aiResult: aiResult
   });
 });
 
@@ -66,8 +135,11 @@ router.post('/upload-image-web', async (req, res) => {
     const filePath = path.join(uploadsDir, filename);
     await fs.promises.writeFile(filePath, buffer);
 
+    const aiResult = await runInference(filePath);
+
     res.json({
-      imageUrl: `/public/uploads/${filename}`
+      imageUrl: `/public/uploads/${filename}`,
+      aiResult: aiResult
     });
   } catch (err) {
     console.error('upload-image-web error:', err);
