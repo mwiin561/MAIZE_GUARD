@@ -6,12 +6,12 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
-const tflite = require('tflite-node');
 
-// Load Model
+// Load Model (tflite-node is optional - fails on some hosts e.g. Render with "Unknown usage")
 let model = null;
 const loadModel = async () => {
   try {
+    const tflite = require('tflite-node');
     const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
     if (fs.existsSync(modelPath)) {
       model = new tflite.TFLiteModel(modelPath);
@@ -20,7 +20,7 @@ const loadModel = async () => {
       console.warn('AI Model file not found at:', modelPath);
     }
   } catch (err) {
-    console.error('Error loading AI model:', err);
+    console.warn('AI model unavailable (tflite-node not supported in this environment):', err.message);
   }
 };
 loadModel();
