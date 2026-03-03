@@ -1,6 +1,6 @@
 // Polyfill for TensorFlow.js on Node.js
 global.self = global;
-global.location = { origin: '' }; // Add a fake location object
+global.location = { href: '', origin: '' }; // Add a fake location object with href
 
 const express = require('express');
 const cors = require('cors');
