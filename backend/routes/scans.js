@@ -15,10 +15,10 @@ const loadModel = async () => {
   try {
     const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
     if (fs.existsSync(modelPath)) {
-      // Use file:// prefix for local paths to avoid ERR_INVALID_URL
-      const modelUrl = `file://${modelPath}`;
-      model = await tflite.loadTFLiteModel(modelUrl);
-      console.log('AI Model loaded successfully from:', modelUrl);
+      // Load model as a buffer to avoid 'fetch' issues in Node.js environment
+      const modelBuffer = fs.readFileSync(modelPath);
+      model = await tflite.loadTFLiteModel(modelBuffer.buffer.slice(modelBuffer.byteOffset, modelBuffer.byteOffset + modelBuffer.byteLength));
+      console.log('AI Model loaded successfully from buffer');
     } else {
       console.warn('AI Model file not found at:', modelPath);
     }

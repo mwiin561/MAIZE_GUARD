@@ -1,3 +1,6 @@
+// Polyfill for TensorFlow.js on Node.js
+global.self = global;
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
