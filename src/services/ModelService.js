@@ -105,22 +105,36 @@ class ModelService {
   }
 
   // Removed loadModel() since we do the check in init()
-  
+
+  /**
+   * Dev-only mock so you can test the full flow (camera → analyze → result) in Expo Go
+   * before building an APK. Set ModelService.useMockInDev = true to use it.
+   * Replace with real TFLite/TF.js inference when you add a native runtime.
+   */
   async predict(imageUri) {
     if (!this.isReady) {
       console.log('Model not ready. Falling back to mock logic.');
-      return null;
+      return this._getDevMockResult();
     }
-    
+
     console.log('Predicting using model at:', this.modelUri);
-    // Placeholder for actual inference
-    // const result = await tflite.runModelOnImage({
-    //   model: this.modelUri,
-    //   path: imageUri,
-    //   ...
-    // });
-    
-    return null; 
+    // TODO: Real inference when TFLite/TF.js runtime is added (e.g. in dev build)
+    // const result = await tflite.runModelOnImage({ model: this.modelUri, path: imageUri, ... });
+    // return { isInfected, confidence, isInvalid? };
+
+    return this._getDevMockResult();
+  }
+
+  /**
+   * Returns a mock result for testing in Expo Go. Only used when real inference isn't available.
+   */
+  _getDevMockResult() {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      const isInfected = Math.random() > 0.5;
+      const confidence = Number((Math.random() * (0.95 - 0.82) + 0.82).toFixed(2));
+      return { isInfected, confidence, isInvalid: false };
+    }
+    return null;
   }
   
   // Method to force update/redownload
