@@ -6,8 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
-const tflite = require('@tensorflow/tfjs-tflite');
-const tf = require('@tensorflow/tfjs');
+const tflite = require('tflite-node');
 
 // Load Model
 let model = null;
@@ -15,10 +14,8 @@ const loadModel = async () => {
   try {
     const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
     if (fs.existsSync(modelPath)) {
-      // Load model as a buffer to avoid 'fetch' issues in Node.js environment
-      const modelBuffer = fs.readFileSync(modelPath);
-      model = await tflite.loadTFLiteModel(modelBuffer.buffer.slice(modelBuffer.byteOffset, modelBuffer.byteOffset + modelBuffer.byteLength));
-      console.log('AI Model loaded successfully from buffer');
+      model = new tflite.TFLiteModel(modelPath);
+      console.log('AI Model loaded successfully with tflite-node');
     } else {
       console.warn('AI Model file not found at:', modelPath);
     }
@@ -34,35 +31,24 @@ const runInference = async (imagePath) => {
 
   try {
     const image = await Jimp.read(imagePath);
-    // Resize to 224x224 (Adjust this to match your model's input size)
-    image.cover(224, 224);
+    image.resize(224, 224); // Resize to match model input
     
-    const { data, width, height } = image.bitmap;
-    const buffer = Buffer.from(data);
-    
-    // Convert to Tensor
-    const input = tf.tidy(() => {
-      const img = tf.tensor3d(new Uint8Array(buffer), [height, width, 4]); // Jimp is RGBA
-      return img.slice([0, 0, 0], [height, width, 3]) // Remove Alpha
-                .expandDims(0)
-                .toFloat()
-                .div(255.0); // Normalize to [0, 1]
-    });
+    const imageBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+    const input = tf.node.decodeImage(imageBuffer, 3);
+    const normalized = input.toFloat().div(255.0).expandDims(0);
 
-    const output = model.predict(input);
+    const output = model.predict(normalized);
     const predictions = await output.data();
     
     // Cleanup
     input.dispose();
+    normalized.dispose();
     output.dispose();
 
     // Assuming labels: 0 = Healthy, 1 = Maize Streak Virus
-    // Adjust logic based on your model's output structure
-    const msvConfidence = predictions[1]; // Index 1 for MSV
-    const healthyConfidence = predictions[0]; // Index 0 for Healthy
-    
-    // Sanity Check: If the model is not very sure about either class, 
-    // or if the image doesn't "look" like a leaf based on class distribution.
+    const msvConfidence = predictions[1];
+    const healthyConfidence = predictions[0];
+
     const isVerySure = Math.max(msvConfidence, healthyConfidence) > 0.85;
     const isAmbiguous = Math.abs(msvConfidence - healthyConfidence) < 0.2;
 
