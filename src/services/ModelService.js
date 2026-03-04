@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 import { Platform } from 'react-native';
 
-// TF.js on-device inference (model loaded from backend URL; inference runs on device only)
+// TF.js on-device inference (native only). Web uses ModelService.web.js to avoid pulling in react-native-fs.
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 
