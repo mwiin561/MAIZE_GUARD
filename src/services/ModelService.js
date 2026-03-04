@@ -2,23 +2,13 @@ import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 import { Platform } from 'react-native';
 
-// TF.js on-device inference (load from backend URL; no TF.js runs on Render)
+// TF.js on-device inference (model loaded from backend URL; inference runs on device only)
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 
-// Match backend base URL (no /api) for static model files
-const getBackendOrigin = () => {
-  try {
-    const { API_URL } = require('../api/client');
-    return (API_URL || '').replace(/\/api\/?$/, '') || 'https://maizeguard-backend-1.onrender.com';
-  } catch (_) {
-    return 'https://maizeguard-backend-1.onrender.com';
-  }
-};
-
 const SERVER_URL = Platform.OS === 'web' ? 'http://localhost:5001' : 'http://10.0.2.2:5001';
 const MODEL_URL_TFLITE = `${SERVER_URL}/public/models/v1/model.tflite`;
-const TFJS_MODEL_URL = `${getBackendOrigin()}/public/models/tfjs/model.json`;
+const DEFAULT_BACKEND_ORIGIN = 'https://maizeguard-backend-1.onrender.com';
 const LOCAL_MODEL_DIR = `${FileSystem.documentDirectory}models/`;
 const LOCAL_MODEL_PATH = `${LOCAL_MODEL_DIR}model.tflite`;
 
@@ -56,8 +46,10 @@ class ModelService {
 
       // 2. Try to load TF.js model from backend (static files; no inference on server)
       if (this.tfReady) {
+        const backendOrigin = this._getBackendOrigin();
+        const tfjsModelUrl = `${backendOrigin}/public/models/tfjs/model.json`;
         try {
-          this.tfjsModel = await tf.loadLayersModel(TFJS_MODEL_URL);
+          this.tfjsModel = await tf.loadLayersModel(tfjsModelUrl);
           console.log('TF.js model loaded from backend (on-device inference).');
         } catch (e) {
           console.warn('TF.js model not available (serve model from backend/public/models/tfjs/):', e?.message);
@@ -81,6 +73,15 @@ class ModelService {
     } catch (e) {
       console.log('Model initialization failed:', e?.message);
       this.isReady = false;
+    }
+  }
+
+  _getBackendOrigin() {
+    try {
+      const { API_URL } = require('../api/client');
+      return (API_URL || '').replace(/\/api\/?$/, '') || DEFAULT_BACKEND_ORIGIN;
+    } catch (_) {
+      return DEFAULT_BACKEND_ORIGIN;
     }
   }
 
@@ -157,8 +158,13 @@ class ModelService {
         encoding: FileSystem.EncodingType.Base64,
       });
       const raw = base64ToUint8Array(base64);
-      imageTensor = tf.decodeImage(raw, 3);
-      if (imageTensor.shape.length !== 3) {
+      if (typeof tf.decodeImage === 'function') {
+        imageTensor = tf.decodeImage(raw, 3);
+      } else {
+        const { decodeJpeg } = require('@tensorflow/tfjs-react-native');
+        imageTensor = decodeJpeg(raw, 3);
+      }
+      if (!imageTensor || imageTensor.shape.length !== 3) {
         throw new Error('Unexpected image tensor shape');
       }
       const [h, w] = imageTensor.shape.slice(0, 2);

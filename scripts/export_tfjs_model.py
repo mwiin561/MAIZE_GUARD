@@ -45,6 +45,9 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     tfjs.converters.save_keras_model(model, out_dir)
     print("TF.js model saved to:", os.path.abspath(out_dir))
+    print("")
+    print("Next: Copy the contents of assets/model-tfjs/ to backend/public/models/tfjs/")
+    print("so the app can load the model from your backend URL (Render serves static files).")
 
 if __name__ == "__main__":
     main()
