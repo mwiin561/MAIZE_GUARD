@@ -2,61 +2,93 @@ import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 import { Platform } from 'react-native';
 
-// Match the IP used in client.js
-const SERVER_URL = Platform.OS === 'web' 
-  ? 'http://localhost:5001' 
-  : 'http://10.0.2.2:5001'; 
-const MODEL_URL = `${SERVER_URL}/public/models/v1/model.tflite`;
+// TF.js on-device inference (load from backend URL; no TF.js runs on Render)
+import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-react-native';
+
+// Match backend base URL (no /api) for static model files
+const getBackendOrigin = () => {
+  try {
+    const { API_URL } = require('../api/client');
+    return (API_URL || '').replace(/\/api\/?$/, '') || 'https://maizeguard-backend-1.onrender.com';
+  } catch (_) {
+    return 'https://maizeguard-backend-1.onrender.com';
+  }
+};
+
+const SERVER_URL = Platform.OS === 'web' ? 'http://localhost:5001' : 'http://10.0.2.2:5001';
+const MODEL_URL_TFLITE = `${SERVER_URL}/public/models/v1/model.tflite`;
+const TFJS_MODEL_URL = `${getBackendOrigin()}/public/models/tfjs/model.json`;
 const LOCAL_MODEL_DIR = `${FileSystem.documentDirectory}models/`;
 const LOCAL_MODEL_PATH = `${LOCAL_MODEL_DIR}model.tflite`;
+
+const INPUT_SIZE = 224;
+const NUM_CLASSES = 2; // 0 = Healthy, 1 = Maize Streak Virus
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return arr;
+}
 
 class ModelService {
   constructor() {
     this.isReady = false;
     this.modelUri = null;
+    this.tfjsModel = null;
+    this.tfReady = false;
   }
 
   async init() {
     try {
-      console.log('Initializing ModelService (Hybrid Mode)...');
+      console.log('Initializing ModelService (TF.js on-device + optional TFLite bundle)...');
       await this.ensureDirectoryExists();
 
-      // 1. Check for downloaded update first
+      // 1. Prepare TF.js backend (required before any tf.* call)
+      try {
+        await tf.ready();
+        this.tfReady = true;
+        console.log('TensorFlow.js backend ready.');
+      } catch (e) {
+        console.warn('TF.js backend not available (use dev build for full support):', e?.message);
+      }
+
+      // 2. Try to load TF.js model from backend (static files; no inference on server)
+      if (this.tfReady) {
+        try {
+          this.tfjsModel = await tf.loadLayersModel(TFJS_MODEL_URL);
+          console.log('TF.js model loaded from backend (on-device inference).');
+        } catch (e) {
+          console.warn('TF.js model not available (serve model from backend/public/models/tfjs/):', e?.message);
+        }
+      }
+
+      // 3. TFLite path kept for future native TFLite or model-download UI
       const hasUpdate = await this.checkModelExists();
-      
       if (hasUpdate) {
-        console.log('Using downloaded update model at:', LOCAL_MODEL_PATH);
         this.modelUri = LOCAL_MODEL_PATH;
       } else {
-        // 2. Fallback to Bundled Asset
-        console.log('Using bundled model (v1)...');
-        // Hack: Append .mp4 to bypass Metro config issues with .tflite (and .png image-size check)
-        const asset = Asset.fromModule(require('../../assets/model.tflite.mp4'));
-        await asset.downloadAsync(); // Ensures it's available in cache
-        this.modelUri = asset.localUri;
-        console.log('Bundled model ready at:', this.modelUri);
+        try {
+          const asset = Asset.fromModule(require('../../assets/model.tflite.mp4'));
+          await asset.downloadAsync();
+          this.modelUri = asset.localUri;
+        } catch (_) {}
       }
-      
-      this.isReady = true;
-      
-      // 3. Background: Check for updates silently
-      this.checkForUpdates(); 
 
+      this.isReady = true;
+      this.checkForUpdates();
     } catch (e) {
-      console.log('Model initialization failed:', e.message);
+      console.log('Model initialization failed:', e?.message);
       this.isReady = false;
     }
   }
 
   async checkForUpdates() {
     try {
-        console.log('Checking for model updates...');
-        // In a real app, check version API first. 
-        // Here we just try to download. If server is up, we get it.
-        await this.downloadModel();
-        console.log('Update downloaded. Will be used on next restart.');
+      await this.downloadModel();
     } catch (e) {
-        console.log('No update available or offline:', e.message);
+      console.log('No TFLite update available or offline:', e?.message);
     }
   }
 
@@ -67,10 +99,9 @@ class ModelService {
         await FileSystem.makeDirectoryAsync(LOCAL_MODEL_DIR, { intermediates: true });
       }
     } catch (e) {
-      // If getInfoAsync fails because it's missing, try to create it anyway
       try {
         await FileSystem.makeDirectoryAsync(LOCAL_MODEL_DIR, { intermediates: true });
-      } catch (err) {}
+      } catch (_) {}
     }
   }
 
@@ -85,49 +116,89 @@ class ModelService {
 
   async downloadModel() {
     try {
-      const downloadRes = await FileSystem.downloadAsync(
-        MODEL_URL,
-        LOCAL_MODEL_PATH
-      );
-      
+      const downloadRes = await FileSystem.downloadAsync(MODEL_URL_TFLITE, LOCAL_MODEL_PATH);
       if (downloadRes.status !== 200) {
-        // If 404 or other error, delete the partial file
         await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
-        throw new Error(`Failed to download model. Status: ${downloadRes.status}`);
+        throw new Error(`Status: ${downloadRes.status}`);
       }
-      
-      console.log('Model downloaded successfully to:', downloadRes.uri);
     } catch (e) {
-      // Clean up if failed
       await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
       throw e;
     }
   }
 
-  // Removed loadModel() since we do the check in init()
-
   /**
-   * Dev-only mock so you can test the full flow (camera → analyze → result) in Expo Go
-   * before building an APK. Set ModelService.useMockInDev = true to use it.
-   * Replace with real TFLite/TF.js inference when you add a native runtime.
+   * Run on-device inference with TF.js, or fall back to dev mock.
+   * Returns { isInfected, confidence, isInvalid? }.
    */
   async predict(imageUri) {
     if (!this.isReady) {
-      console.log('Model not ready. Falling back to mock logic.');
       return this._getDevMockResult();
     }
 
-    console.log('Predicting using model at:', this.modelUri);
-    // TODO: Real inference when TFLite/TF.js runtime is added (e.g. in dev build)
-    // const result = await tflite.runModelOnImage({ model: this.modelUri, path: imageUri, ... });
-    // return { isInfected, confidence, isInvalid? };
+    if (this.tfjsModel) {
+      try {
+        return await this._runTfjsInference(imageUri);
+      } catch (e) {
+        console.warn('TF.js inference failed, using fallback:', e?.message);
+      }
+    }
 
     return this._getDevMockResult();
   }
 
-  /**
-   * Returns a mock result for testing in Expo Go. Only used when real inference isn't available.
-   */
+  async _runTfjsInference(imageUri) {
+    let imageTensor = null;
+    let resized = null;
+    let normalized = null;
+
+    try {
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const raw = base64ToUint8Array(base64);
+      imageTensor = tf.decodeImage(raw, 3);
+      if (imageTensor.shape.length !== 3) {
+        throw new Error('Unexpected image tensor shape');
+      }
+      const [h, w] = imageTensor.shape.slice(0, 2);
+      resized = tf.image.resizeBilinear(imageTensor, [INPUT_SIZE, INPUT_SIZE]);
+      imageTensor.dispose();
+      imageTensor = null;
+      normalized = resized.toFloat().div(255.0).expandDims(0);
+      resized.dispose();
+      resized = null;
+
+      const output = this.tfjsModel.predict(normalized);
+      const predictions = await output.data();
+      normalized.dispose();
+      output.dispose();
+
+      const healthyConfidence = predictions[0];
+      const msvConfidence = predictions[1];
+      const isVerySure = Math.max(msvConfidence, healthyConfidence) > 0.85;
+      const isAmbiguous = Math.abs(msvConfidence - healthyConfidence) < 0.2;
+
+      if (!isVerySure || isAmbiguous) {
+        return {
+          isInvalid: true,
+          isInfected: false,
+          confidence: Math.max(msvConfidence, healthyConfidence),
+        };
+      }
+
+      return {
+        isInvalid: false,
+        isInfected: msvConfidence > 0.5,
+        confidence: Math.max(msvConfidence, healthyConfidence),
+      };
+    } finally {
+      if (imageTensor) imageTensor.dispose();
+      if (resized) resized.dispose();
+      if (normalized) normalized.dispose();
+    }
+  }
+
   _getDevMockResult() {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       const isInfected = Math.random() > 0.5;
@@ -136,18 +207,17 @@ class ModelService {
     }
     return null;
   }
-  
-  // Method to force update/redownload
+
   async updateModel() {
-      try {
-          await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
-          await this.downloadModel();
-          this.modelUri = LOCAL_MODEL_PATH;
-          return true;
-      } catch (e) {
-          console.log('Failed to update model:', e);
-          return false;
-      }
+    try {
+      await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
+      await this.downloadModel();
+      this.modelUri = LOCAL_MODEL_PATH;
+      return true;
+    } catch (e) {
+      console.log('Failed to update model:', e?.message);
+      return false;
+    }
   }
 }
 
