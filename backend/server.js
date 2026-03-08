@@ -19,7 +19,8 @@ const path = require('path');
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // Body parser
+// Allow large JSON bodies for upload-image-web (base64 images) and sync batches
+app.use(express.json({ limit: '25mb' }));
 
 // Static folder for serving models
 app.use('/public', express.static(path.join(__dirname, 'public')));

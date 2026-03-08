@@ -20,9 +20,10 @@ import AccountScreen from './src/screens/AccountScreen';
 import HelpScreen from './src/screens/HelpScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 
-
-// Keep the splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync();
+// Only prevent auto-hide on native; on web it can cause a permanent blank screen
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync();
+}
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -106,25 +107,24 @@ const AppNav = () => {
     prepare();
   }, []);
 
-  const onLayoutRootView = useCallback(async () => {
-    if (appIsReady && !isLoading && fontsLoaded) {
-      await SplashScreen.hideAsync();
+  useEffect(() => {
+    if (appIsReady && !isLoading && fontsLoaded && Platform.OS !== 'web') {
+      SplashScreen.hideAsync();
     }
   }, [appIsReady, isLoading, fontsLoaded]);
 
+  const onLayoutRootView = useCallback(() => {}, []);
+
   if (!appIsReady || isLoading || !fontsLoaded) {
-    if (Platform.OS === 'web') {
-      return (
-        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-          <ActivityIndicator size="large" color="#4CAF50" />
-        </View>
-      );
-    }
-    return null;
+    return (
+      <View style={[styles.loadingRoot, Platform.OS === 'web' && styles.loadingRootWeb]}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
+    );
   }
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    <View style={[styles.root, Platform.OS === 'web' && styles.rootWeb]} onLayout={onLayoutRootView}>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {userToken ? (
@@ -154,6 +154,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
+  rootWeb: { flex: 1, minHeight: '100vh' },
+  loadingRoot: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingRootWeb: { minHeight: '100vh' },
   drawerHeader: {
     padding: 20,
     paddingTop: 40, // Extra padding for status bar area

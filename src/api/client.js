@@ -7,10 +7,14 @@ import { Platform } from 'react-native';
 // For Android Emulator, use 10.0.2.2
 // For Physical Device, use your machine's LAN IP (e.g., 192.168.1.X)
 // For Web, localhost is fine
-const BASE_URL = 'https://maizeguard-backend-1.onrender.com/api'; 
+const BASE_URL = 'https://maizeguard-backend.onrender.com/api'; 
 
 
 export const API_URL = BASE_URL;
+
+function handleAuthError(response, data) {
+  return response.status === 401 && (data && (data.msg === 'Token is not valid' || data.msg === 'No token, authorization denied'));
+}
 
 export const loginUser = async (email, password) => {
   try {
@@ -99,6 +103,10 @@ export const updateUserProfile = async (profileData) => {
 
     const data = await response.json();
     if (!response.ok) {
+      if (handleAuthError(response, data)) {
+        await AsyncStorage.removeItem('userToken');
+        throw new Error('Your session has expired. Please log out and log in again.');
+      }
       throw new Error(data.msg || 'Failed to update profile');
     }
     return data;
@@ -121,6 +129,10 @@ export const saveScan = async (scanData) => {
 
     const data = await response.json();
     if (!response.ok) {
+      if (handleAuthError(response, data)) {
+        await AsyncStorage.removeItem('userToken');
+        throw new Error('Your session has expired. Please log out and log in again.');
+      }
       throw new Error(data.msg || 'Failed to save scan');
     }
     return data;
@@ -141,8 +153,21 @@ export const syncScans = async (scans) => {
       body: JSON.stringify(scans),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      if (response.status === 413) {
+        throw new Error('Request too large. Try exporting fewer items at a time.');
+      }
+      throw new Error('Server error. Please try again.');
+    }
     if (!response.ok) {
+      if (handleAuthError(response, data)) {
+        await AsyncStorage.removeItem('userToken');
+        throw new Error('Your session has expired. Please log out and log in again, then try exporting.');
+      }
       throw new Error(data.msg || 'Sync failed');
     }
     return data;
@@ -175,8 +200,21 @@ export const uploadScanImage = async (imageUri) => {
         body: JSON.stringify({ imageData }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const text = await response.text();
+      let data;
+      try {
+        data = text && contentType.includes('application/json') ? JSON.parse(text) : {};
+      } catch {
+        if (response.status === 413) {
+          throw new Error('Image too large. Skipping image for this item.');
+        }
+        throw new Error('Upload failed. Try a smaller image.');
+      }
       if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error('Image too large. Skipping image for this item.');
+        }
         throw new Error(data.msg || 'Image upload failed');
       }
       return data;

@@ -25,8 +25,16 @@ def main():
 
     try:
         import tensorflowjs as tfjs
-    except ImportError:
-        print("Install: pip install tensorflowjs")
+    except ImportError as e:
+        print("tensorflowjs import failed:", e)
+        print("")
+        print("On Windows, tensorflowjs needs 'flax', which pulls in uvloop (not supported on Windows).")
+        print("Run the export in WSL (Windows Subsystem for Linux) once:")
+        print("  1. Install WSL from Microsoft Store if needed, then open a WSL terminal.")
+        print("  2. cd /mnt/c/Users/CLIENT/Documents/trae_projects/MAIZE_GUARD")
+        print("  3. pip3 install tensorflow tensorflowjs")
+        print("  4. python3 scripts/export_tfjs_model.py")
+        print("  5. Copy backend/public/models/tfjs/* into your repo and commit.")
         sys.exit(1)
 
     # Same input shape as backend (224x224 RGB)
@@ -41,13 +49,26 @@ def main():
     ])
     model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
 
-    out_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "model-tfjs")
-    os.makedirs(out_dir, exist_ok=True)
-    tfjs.converters.save_keras_model(model, out_dir)
-    print("TF.js model saved to:", os.path.abspath(out_dir))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.join(script_dir, "..")
+    assets_dir = os.path.join(project_root, "assets", "model-tfjs")
+    backend_dir = os.path.join(project_root, "backend", "public", "models", "tfjs")
+
+    os.makedirs(assets_dir, exist_ok=True)
+    tfjs.converters.save_keras_model(model, assets_dir)
+    print("TF.js model saved to:", os.path.abspath(assets_dir))
+
+    os.makedirs(backend_dir, exist_ok=True)
+    import shutil
+    for name in os.listdir(assets_dir):
+        src = os.path.join(assets_dir, name)
+        dst = os.path.join(backend_dir, name)
+        if os.path.isfile(src):
+            shutil.copy2(src, dst)
+            print("  Copied to backend:", name)
     print("")
-    print("Next: Copy the contents of assets/model-tfjs/ to backend/public/models/tfjs/")
-    print("so the app can load the model from your backend URL (Render serves static files).")
+    print("Backend folder updated:", os.path.abspath(backend_dir))
+    print("Deploy the backend (push to Render) so the app can load the model.")
 
 if __name__ == "__main__":
     main()

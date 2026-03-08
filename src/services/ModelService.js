@@ -8,7 +8,7 @@ import '@tensorflow/tfjs-react-native';
 
 const SERVER_URL = Platform.OS === 'web' ? 'http://localhost:5001' : 'http://10.0.2.2:5001';
 const MODEL_URL_TFLITE = `${SERVER_URL}/public/models/v1/model.tflite`;
-const DEFAULT_BACKEND_ORIGIN = 'https://maizeguard-backend-1.onrender.com';
+const DEFAULT_BACKEND_ORIGIN = 'https://maizeguard-backend.onrender.com';
 const LOCAL_MODEL_DIR = `${FileSystem.documentDirectory}models/`;
 const LOCAL_MODEL_PATH = `${LOCAL_MODEL_DIR}model.tflite`;
 
