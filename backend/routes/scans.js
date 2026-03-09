@@ -7,67 +7,100 @@ const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
 
-// Load Model (tflite-node is optional - fails on some hosts e.g. Render with "Unknown usage")
-let model = null;
-const loadModel = async () => {
+// Option B: Backend runs the real model (v2 TFLite when available, else TF.js on e.g. Render)
+let tfliteModel = null;
+let tfjsModel = null;
+let tf = null;
+
+const loadTFLite = () => {
   try {
     const tflite = require('tflite-node');
     const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
     if (fs.existsSync(modelPath)) {
-      model = new tflite.TFLiteModel(modelPath);
-      console.log('AI Model loaded successfully with tflite-node');
+      tfliteModel = new tflite.TFLiteModel(modelPath);
+      console.log('AI Model (v2 TFLite) loaded with tflite-node');
     } else {
-      console.warn('AI Model file not found at:', modelPath);
+      console.warn('TFLite model not found at:', modelPath);
     }
   } catch (err) {
-    console.warn('AI model unavailable (tflite-node not supported in this environment):', err.message);
+    console.warn('TFLite unavailable (e.g. on Render):', err.message);
   }
 };
-loadModel();
+loadTFLite();
 
-// Helper: Run Inference
+const loadTFjs = async () => {
+  if (tfjsModel) return;
+  try {
+    tf = require('@tensorflow/tfjs-node');
+    const tfjsDir = path.join(__dirname, '..', 'public', 'models', 'tfjs');
+    const modelUrl = `file://${tfjsDir.replace(/\\/g, '/')}/model.json`;
+    tfjsModel = await tf.loadLayersModel(modelUrl);
+    console.log('AI Model (TF.js fallback) loaded from public/models/tfjs');
+  } catch (err) {
+    console.warn('TF.js model fallback unavailable:', err.message);
+  }
+};
+loadTFjs();
+
+function parsePredictions(predictions) {
+  if (!predictions || predictions.length < 2) return null;
+  const healthyConfidence = Number(predictions[0]);
+  const msvConfidence = Number(predictions[1]);
+  const isVerySure = Math.max(msvConfidence, healthyConfidence) > 0.85;
+  const isAmbiguous = Math.abs(msvConfidence - healthyConfidence) < 0.2;
+  if (!isVerySure || isAmbiguous) {
+    return {
+      isInvalid: true,
+      diagnosis: 'Uncertain',
+      confidence: Math.max(msvConfidence, healthyConfidence),
+      raw: Array.from(predictions)
+    };
+  }
+  return {
+    isInvalid: false,
+    isInfected: msvConfidence > 0.5,
+    confidence: Math.max(msvConfidence, healthyConfidence),
+    diagnosis: msvConfidence > 0.5 ? 'Maize Streak Virus' : 'Healthy',
+    raw: Array.from(predictions)
+  };
+}
+
 const runInference = async (imagePath) => {
-  if (!model) return null;
+  if (tfliteModel == null && tfjsModel == null) await loadTFjs();
+  const hasTFLite = tfliteModel != null;
+  const hasTFjs = tfjsModel != null;
+  if (!hasTFLite && !hasTFjs) return null;
 
   try {
     const image = await Jimp.read(imagePath);
-    image.resize(224, 224); // Resize to match model input
-    
+    image.resize(224, 224);
     const imageBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+
+    if (!tf) tf = require('@tensorflow/tfjs-node');
     const input = tf.node.decodeImage(imageBuffer, 3);
     const normalized = input.toFloat().div(255.0).expandDims(0);
 
-    const output = model.predict(normalized);
-    const predictions = await output.data();
-    
-    // Cleanup
+    let predictions;
+    if (tfliteModel) {
+      try {
+        const output = tfliteModel.predict(normalized);
+        predictions = Array.isArray(output) ? output : (await output.data ? output.data() : Array.from(output));
+      } catch (e) {
+        if (tfjsModel) {
+          const out = tfjsModel.predict(normalized);
+          predictions = await out.data();
+          if (out.dispose) out.dispose();
+        } else throw e;
+      }
+    } else {
+      const output = tfjsModel.predict(normalized);
+      predictions = await output.data();
+      output.dispose();
+    }
     input.dispose();
     normalized.dispose();
-    output.dispose();
 
-    // Assuming labels: 0 = Healthy, 1 = Maize Streak Virus
-    const msvConfidence = predictions[1];
-    const healthyConfidence = predictions[0];
-
-    const isVerySure = Math.max(msvConfidence, healthyConfidence) > 0.85;
-    const isAmbiguous = Math.abs(msvConfidence - healthyConfidence) < 0.2;
-
-    if (!isVerySure || isAmbiguous) {
-      return {
-        isInvalid: true,
-        diagnosis: 'Not a Maize Leaf',
-        confidence: Math.max(msvConfidence, healthyConfidence),
-        raw: Array.from(predictions)
-      };
-    }
-
-    return {
-      isInvalid: false,
-      isInfected: msvConfidence > 0.5,
-      confidence: Math.max(msvConfidence, healthyConfidence),
-      diagnosis: msvConfidence > 0.5 ? 'Maize Streak Virus' : 'Healthy',
-      raw: Array.from(predictions)
-    };
+    return parsePredictions(predictions);
   } catch (err) {
     console.error('Inference error:', err);
     return null;
