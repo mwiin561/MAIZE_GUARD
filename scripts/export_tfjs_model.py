@@ -15,6 +15,12 @@ Requirements: pip install tensorflow tensorflowjs
 import os
 import sys
 
+# Ensure pkg_resources is available before tensorflowjs (needed by some deps on Python 3.12+)
+try:
+    import pkg_resources  # noqa: F401
+except ImportError:
+    import setuptools  # noqa: F401
+
 def main():
     try:
         import tensorflow as tf

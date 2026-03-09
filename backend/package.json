@@ -19,7 +19,8 @@
     "mongoose": "^7.6.3",
     "multer": "^2.0.2",
     "jimp": "^0.22.10",
-    "tflite-node": "^1.0.0"
+    "tflite-node": "^1.0.0",
+    "@tensorflow/tfjs-node": "^4.22.0"
   },
   "devDependencies": {
     "mongodb-memory-server": "^11.0.1",
