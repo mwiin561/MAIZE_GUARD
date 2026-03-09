@@ -29,9 +29,8 @@ const loadTFLite = () => {
 loadTFLite();
 
 const loadTFjs = async () => {
-  if (tfjsModel) return;
+  if (tfjsModel || !tf) return;
   try {
-    tf = require('@tensorflow/tfjs-node');
     const tfjsDir = path.join(__dirname, '..', 'public', 'models', 'tfjs');
     const modelUrl = `file://${tfjsDir.replace(/\\/g, '/')}/model.json`;
     tfjsModel = await tf.loadLayersModel(modelUrl);
@@ -40,6 +39,12 @@ const loadTFjs = async () => {
     console.warn('TF.js model fallback unavailable:', err.message);
   }
 };
+// Optional: needed for image decode and inference. Fails on Windows if native addon did not install.
+try {
+  tf = require('@tensorflow/tfjs-node');
+} catch (_) {
+  tf = null;
+}
 loadTFjs();
 
 function parsePredictions(predictions) {
@@ -70,13 +75,14 @@ const runInference = async (imagePath) => {
   const hasTFLite = tfliteModel != null;
   const hasTFjs = tfjsModel != null;
   if (!hasTFLite && !hasTFjs) return null;
+  // Need tf for image decode and model input; skip inference if optional install failed (e.g. Windows)
+  if (!tf) return null;
 
   try {
     const image = await Jimp.read(imagePath);
     image.resize(224, 224);
     const imageBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
 
-    if (!tf) tf = require('@tensorflow/tfjs-node');
     const input = tf.node.decodeImage(imageBuffer, 3);
     const normalized = input.toFloat().div(255.0).expandDims(0);
 
