@@ -381,7 +381,7 @@ const DiagnosisScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.resultScroll}>
           {/* Main Card */}
           <View style={styles.mainCard}>
-            <Image source={{ uri: result.image }} style={styles.mainImage} />
+            <Image source={{ uri: result.image }} style={styles.mainImage} resizeMode="cover" />
             <View style={styles.mainCardContent}>
               <View style={styles.diagnosisRow}>
                 <Text style={styles.diagnosisLabel}>DIAGNOSIS RESULTS</Text>
@@ -431,13 +431,14 @@ const DiagnosisScreen = ({ navigation }) => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-            <CameraView style={styles.camera} ref={cameraRef} facing="back">
+            <View style={styles.camera}>
+                <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} facing="back" />
                 <View style={styles.cameraControls}>
                     <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
                         <View style={styles.captureInner} />
                     </TouchableOpacity>
                 </View>
-            </CameraView>
+            </View>
             <TouchableOpacity style={styles.galleryButton} onPress={pickImage}>
                 <Text style={styles.galleryText}>Upload from Gallery</Text>
             </TouchableOpacity>
@@ -491,7 +492,6 @@ const styles = StyleSheet.create({
   mainImage: {
     width: '100%',
     height: 200,
-    resizeMode: 'cover',
   },
   mainCardContent: {
     padding: 16,

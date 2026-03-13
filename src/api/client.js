@@ -4,10 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Platform } from 'react-native';
 
-// For Android Emulator, use 10.0.2.2
-// For Physical Device, use your machine's LAN IP (e.g., 192.168.1.X)
-// For Web, localhost is fine
-const BASE_URL = 'https://maizeguard-backend.onrender.com/api'; 
+// On the phone, localhost is the phone itself — use your PC's LAN IP so the device can reach the backend.
+// Replace with your PC's IP if different (see Metro "Network" URL, e.g. 192.168.x.x).
+const DEV_BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST || '192.168.110.211';
+const BASE_URL = Platform.OS === 'web'
+  ? 'http://localhost:5001/api'
+  : `http://${DEV_BACKEND_HOST}:5001/api`; 
 
 
 export const API_URL = BASE_URL;

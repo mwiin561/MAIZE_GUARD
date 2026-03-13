@@ -3,20 +3,21 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const connectDB = async () => {
   try {
-    let uri = process.env.MONGO_URI || 'mongodb+srv://MAIZE-GUARD_ADMIN-DB:5TR0NGP%4055W0RD@cluster0.d9jcjuz.mongodb.net/?appName=Cluster0';
+    const uri = process.env.MONGO_URI;
 
     if (uri) {
-        console.log(`Attempting to connect to MongoDB Atlas...`);
+        const isAtlas = uri.includes('mongodb+srv');
+        console.log(`Attempting to connect to ${isAtlas ? 'MongoDB Atlas' : 'Local MongoDB'}...`);
         try {
             await mongoose.connect(uri, {
               useNewUrlParser: true,
               useUnifiedTopology: true,
-              serverSelectionTimeoutMS: 5000 // 5s timeout
+              serverSelectionTimeoutMS: 5000
             });
-            console.log('MongoDB Connected to Atlas!');
-            return; // Success
+            console.log(`Connected to ${isAtlas ? 'MongoDB Atlas' : 'Local MongoDB'}!`);
+            return;
         } catch (err) {
-            console.warn('Failed to connect to MongoDB Atlas. Falling back to In-Memory DB...');
+            console.warn(`Failed to connect to ${isAtlas ? 'Atlas/Local' : 'Database'}. Falling back to In-Memory DB...`);
         }
     }
 

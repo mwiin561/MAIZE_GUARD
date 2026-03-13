@@ -1,5 +1,5 @@
 import React, { useContext, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, TouchableWithoutFeedback, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, Pressable, ImageBackground, Platform } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -315,7 +315,7 @@ const HomeScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setProfileMenuVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setProfileMenuVisible(false)}>
+        <Pressable onPress={() => setProfileMenuVisible(false)}>
             <View style={styles.modalOverlay}>
                 <View style={styles.menuContainer}>
                     <TouchableOpacity 
@@ -343,7 +343,7 @@ const HomeScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 </View>
             </View>
-        </TouchableWithoutFeedback>
+        </Pressable>
       </Modal>
 
       <FlatList
@@ -384,10 +384,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    boxShadow: '0px 4px 4px rgba(0,0,0,0.3)',
   },
   container: {
     flex: 1,
@@ -438,10 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 8,
     width: 250,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(0,0,0,0.15)',
     elevation: 8,
     borderWidth: 1,
     borderColor: '#f0f0f0',
@@ -535,10 +529,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
     elevation: 4,
   },
   quickScanTitle: {
@@ -577,10 +568,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.05)',
     elevation: 2,
   },
   statIconContainer: {
@@ -622,10 +610,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0,0,0,0.05)',
     elevation: 1,
   },
   emptyInlineTitle: {
@@ -663,10 +648,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 12,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0,0,0,0.05)',
     elevation: 1,
   },
   recentImage: {

@@ -70,6 +70,42 @@ function parsePredictions(predictions) {
   };
 }
 
+// Optional: call local Python TFLite service (real v2 model) when TFLITE_SERVICE_URL is set
+const TFLITE_SERVICE_URL = process.env.TFLITE_SERVICE_URL || '';
+if (TFLITE_SERVICE_URL) {
+  console.log('TFLite service URL set; scans will use real v2 model at', TFLITE_SERVICE_URL);
+}
+
+const callTFLiteService = async (imagePathOrBuffer, isBuffer = false) => {
+  if (!TFLITE_SERVICE_URL) return null;
+  const base = TFLITE_SERVICE_URL.replace(/\/$/, '');
+  const url = `${base}/predict`;
+  try {
+    let body;
+    let contentType;
+    if (isBuffer && Buffer.isBuffer(imagePathOrBuffer)) {
+      body = imagePathOrBuffer;
+      contentType = 'application/octet-stream';
+    } else {
+      const imageBuffer = await fs.promises.readFile(imagePathOrBuffer);
+      body = imageBuffer;
+      contentType = 'application/octet-stream';
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.error) return null;
+    return data;
+  } catch (err) {
+    console.warn('TFLite service call failed:', err.message);
+    return null;
+  }
+};
+
 const runInference = async (imagePath) => {
   if (tfliteModel == null && tfjsModel == null) await loadTFjs();
   const hasTFLite = tfliteModel != null;
@@ -136,8 +172,9 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ msg: 'No file uploaded.' });
   }
-
-  const aiResult = await runInference(req.file.path);
+  // Prefer local TFLite service (real v2 model) when TFLITE_SERVICE_URL is set
+  let aiResult = await callTFLiteService(req.file.path, false);
+  if (!aiResult) aiResult = await runInference(req.file.path);
 
   res.json({
     imageUrl: `/public/uploads/${req.file.filename}`,
@@ -177,7 +214,9 @@ router.post('/upload-image-web', async (req, res) => {
     const filePath = path.join(uploadsDir, filename);
     await fs.promises.writeFile(filePath, buffer);
 
-    const aiResult = await runInference(filePath);
+    // Prefer local TFLite service (real v2 model) when TFLITE_SERVICE_URL is set
+    let aiResult = await callTFLiteService(buffer, true);
+    if (!aiResult) aiResult = await runInference(filePath);
 
     res.json({
       imageUrl: `/public/uploads/${filename}`,

@@ -6,3 +6,10 @@ yarn-debug.log*
 yarn-error.log*
 public/uploads/*
 !public/uploads/.gitkeep
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules

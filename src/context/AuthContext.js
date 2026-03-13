@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 
 import { loginUser, registerUser, getUserProfile, updateUserProfile } from '../api/client';
 
@@ -16,12 +17,16 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
 
+  // Redirect URI must be added to Google Cloud Console (Credentials → OAuth 2.0 client → Authorized redirect URIs)
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'maizeguard', path: 'redirect' });
+
   const [request, response, promptAsync] = Google.useAuthRequest({
     iosClientId: '802300813012-73a2v8857725natc8uk72vkcs7e7uunh.apps.googleusercontent.com',
     androidClientId: '802300813012-73a2v8857725natc8uk72vkcs7e7uunh.apps.googleusercontent.com',
     webClientId: '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com',
+    redirectUri,
   });
-  console.log('Google redirect URI:', request?.redirectUri);
+  if (__DEV__) console.log('Google redirect URI (add this in Google Cloud Console):', redirectUri);
 
   useEffect(() => {
     console.log('Auth response:', response);
