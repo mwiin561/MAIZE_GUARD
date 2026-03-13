@@ -6,10 +6,13 @@ yarn-debug.log*
 yarn-error.log*
 public/uploads/*
 !public/uploads/.gitkeep
-node_modules
-node_modules
-node_modules
-node_modules
-node_modules
-node_modules
-node_modules
+
+# Virtual Environments
+.venv/
+venv/
+env/
+tflite_service/.venv/
+tflite_service/venv/
+tflite_service/env/
+**/__pycache__/
+*.pyc

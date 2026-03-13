@@ -41,7 +41,7 @@ yarn-error.*
 /android
 
 # Python virtual environment (for TF.js model export)
-.venv/
-.venv_wsl/
-venv/
-env/
+**/.venv/
+**/.venv_wsl/
+**/venv/
+**/env/
