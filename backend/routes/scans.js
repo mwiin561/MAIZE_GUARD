@@ -40,9 +40,37 @@ function parsePredictions(predictions) {
 }
 
 const runInference = async (imagePath) => {
-  if (!tf) return null;
-  // ... (inference logic same as before, but using result instead of Mongoose)
-  return { diagnosis: 'Maize Streak Virus', confidence: 0.92 }; // Mocking for now
+  try {
+    const serviceUrl = process.env.TFLITE_SERVICE_URL || 'http://localhost:5003';
+    console.log(`Calling AI service at ${serviceUrl}/predict ...`);
+
+    // We can send the file as multipart or base64. 
+    // The Python service supports both. We'll use base64 for consistency.
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+
+    const response = await fetch(`${serviceUrl}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageData: base64Image })
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI Service error: ${response.status}`);
+    }
+
+    const aiResult = await response.json();
+    return aiResult;
+  } catch (err) {
+    console.warn('AI Inference failed (Mocking fallback):', err.message);
+    // Dynamic mock based on previous logic but with a warning
+    return { 
+      diagnosis: 'Mock: AI Service Unreachable', 
+      confidence: 0,
+      isInvalid: true,
+      error: err.message 
+    };
+  }
 };
 
 // Multer Storage
