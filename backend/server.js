@@ -1,15 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const connectDB = require('./config/db');
+const db = require('./config/db');
 
-// Load environment variables
-dotenv.config();
-
-// Connect to database
-(async () => {
-  await connectDB();
-})();
+// Database pool check
+db.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Initial PostgreSQL connection failed:', err.message);
+  } else {
+    console.log('PostgreSQL initial query successful.');
+  }
+});
 
 
 

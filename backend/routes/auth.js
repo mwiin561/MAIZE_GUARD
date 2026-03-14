@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const db = require('../config/db');
 
 // @route   POST api/auth/register
 // @desc    Register user
@@ -11,34 +11,29 @@ router.post('/register', async (req, res) => {
   const { name, email, password, region, farmSize } = req.body;
 
   try {
-    let user = await User.findOne({ email });
+    const existingUser = await db.query('SELECT * FROM users WHERE email = $1', [email]);
 
-    if (user) {
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({ msg: 'User already exists' });
     }
 
-    user = new User({
-      name,
-      email,
-      password,
-      region,
-      farmSize
-    });
-
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    await user.save();
+    const newUser = await db.query(
+      'INSERT INTO users (name, email, password, region, farm_size) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email',
+      [name, email, hashedPassword, region, farmSize]
+    );
 
     const payload = {
       user: {
-        id: user.id
+        id: newUser.rows[0].id
       }
     };
 
     jwt.sign(
       payload,
-      process.env.JWT_SECRET || 'secret', // Use .env in production
+      process.env.JWT_SECRET || 'secret',
       { expiresIn: 360000 },
       (err, token) => {
         if (err) throw err;
@@ -58,7 +53,8 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    let user = await User.findOne({ email });
+    const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
 
     if (!user) {
       return res.status(400).json({ msg: 'Invalid Credentials' });
@@ -97,8 +93,8 @@ router.post('/login', async (req, res) => {
 const auth = require('../middleware/auth');
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
-    res.json(user);
+    const result = await db.query('SELECT id, name, email, region, farm_size, created_at FROM users WHERE id = $1', [req.user.id]);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -111,24 +107,15 @@ router.get('/me', auth, async (req, res) => {
 router.put('/profile', auth, async (req, res) => {
   const { name, region, farmSize } = req.body;
 
-  // Build profile object
-  const profileFields = {};
-  if (name) profileFields.name = name;
-  if (region) profileFields.region = region;
-  if (farmSize) profileFields.farmSize = farmSize;
-
   try {
-    let user = await User.findById(req.user.id);
+    const result = await db.query(
+      'UPDATE users SET name = COALESCE($1, name), region = COALESCE($2, region), farm_size = COALESCE($3, farm_size) WHERE id = $4 RETURNING id, name, email, region, farm_size',
+      [name, region, farmSize, req.user.id]
+    );
 
-    if (!user) return res.status(404).json({ msg: 'User not found' });
+    if (result.rows.length === 0) return res.status(404).json({ msg: 'User not found' });
 
-    user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: profileFields },
-      { new: true }
-    ).select('-password');
-
-    res.json(user);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

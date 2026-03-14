@@ -1,41 +1,26 @@
-const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const connectDB = async () => {
-  try {
-    const uri = process.env.MONGO_URI;
+// Use connection string from environment variables
+const connectionString = process.env.DATABASE_URL;
 
-    if (uri) {
-        const isAtlas = uri.includes('mongodb+srv');
-        console.log(`Attempting to connect to ${isAtlas ? 'MongoDB Atlas' : 'Local MongoDB'}...`);
-        try {
-            await mongoose.connect(uri, {
-              useNewUrlParser: true,
-              useUnifiedTopology: true,
-              serverSelectionTimeoutMS: 5000
-            });
-            console.log(`Connected to ${isAtlas ? 'MongoDB Atlas' : 'Local MongoDB'}!`);
-            return;
-        } catch (err) {
-            console.warn(`Failed to connect to ${isAtlas ? 'Atlas/Local' : 'Database'}. Falling back to In-Memory DB...`);
-        }
-    }
-
-    // Fallback to Memory Server
-    const mongod = await MongoMemoryServer.create();
-    const memoryUri = mongod.getUri();
-    
-    await mongoose.connect(memoryUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    
-    console.log(`InMemory MongoDB Connected at ${memoryUri}`);
-
-  } catch (err) {
-    console.error('Fatal Database Error:', err.message);
-    process.exit(1);
+const pool = new Pool({
+  connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false // Required for Neon and many hosted PostgreSQL services
   }
-};
+});
 
-module.exports = connectDB;
+pool.on('connect', () => {
+  console.log('Connected to PostgreSQL Database (Neon)!');
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  pool
+};
