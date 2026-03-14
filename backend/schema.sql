@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS scans (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    local_id VARCHAR(255) NOT NULL,
+    local_id VARCHAR(255) NOT NULL UNIQUE,
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
     accuracy DECIMAL(10, 2),

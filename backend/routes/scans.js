@@ -80,6 +80,39 @@ router.post('/upload-image-web', async (req, res) => {
   }
 });
 
+// @route   POST api/scans
+router.post('/', auth, async (req, res) => {
+  try {
+    const s = req.body;
+    const query = `
+      INSERT INTO scans (
+        user_id, local_id, latitude, longitude, accuracy, 
+        model_prediction, confidence, growth_stage, plant_age,
+        severity, user_verified, final_diagnosis,
+        weather, weed_presence, leafhopper_observed,
+        retries, time_spent_seconds, result_accepted,
+        image_url, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+      RETURNING *
+    `;
+    
+    const params = [
+      req.user.id, s.localId, s.location?.latitude, s.location?.longitude, s.location?.accuracy,
+      s.diagnosis?.modelPrediction, s.diagnosis?.confidence, s.growthStage, s.plantAge,
+      s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
+      s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
+      s.appUsage?.retries, s.appUsage?.timeSpentSeconds, s.appUsage?.resultAccepted,
+      s.imageUrl
+    ];
+
+    const result = await db.query(query, params);
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // @route   POST api/scans/sync (SQL VERSION)
 router.post('/sync', auth, async (req, res) => {
   try {
@@ -114,8 +147,10 @@ router.post('/sync', auth, async (req, res) => {
         ];
 
         const result = await db.query(query, params);
+        // Even if ON CONFLICT happens, we count it as synced for the frontend
         savedScans.push(s.localId);
       } catch (err) {
+        console.error(`Sync error for ${s.localId}:`, err.message);
         errors.push({ localId: s.localId, error: err.message });
       }
     }
