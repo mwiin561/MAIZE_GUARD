@@ -7,10 +7,9 @@ import { Platform } from 'react-native';
 // On the phone, localhost is the phone itself — use your PC's LAN IP so the device can reach the backend.
 // Replace with your PC's IP if different (see Metro "Network" URL, e.g. 192.168.x.x).
 const DEV_BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST || '192.168.110.211';
-const BASE_URL = Platform.OS === 'web'
-  ? 'http://localhost:5001/api'
-  : `http://${DEV_BACKEND_HOST}:5001/api`; 
+const PRODUCTION_URL = 'https://maizeguard-backend-1.onrender.com/api';
 
+const BASE_URL = PRODUCTION_URL;
 
 export const API_URL = BASE_URL;
 

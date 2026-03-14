@@ -59,6 +59,27 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
   res.json({ imageUrl: `/public/uploads/${req.file.filename}`, aiResult });
 });
 
+router.post('/upload-image-web', async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData) return res.status(400).json({ msg: 'No image data' });
+
+    const matches = imageData.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) return res.status(400).json({ msg: 'Invalid image format' });
+
+    const buffer = Buffer.from(matches[2], 'base64');
+    const filename = `scan-${Date.now()}.jpg`;
+    const filePath = path.join(__dirname, '..', 'public', 'uploads', filename);
+
+    await fs.promises.writeFile(filePath, buffer);
+    let aiResult = await runInference(filePath);
+
+    res.json({ imageUrl: `/public/uploads/${filename}`, aiResult });
+  } catch (err) {
+    res.status(500).json({ msg: 'Server error saving web image' });
+  }
+});
+
 // @route   POST api/scans/sync (SQL VERSION)
 router.post('/sync', auth, async (req, res) => {
   try {
