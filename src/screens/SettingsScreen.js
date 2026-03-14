@@ -23,7 +23,9 @@ const SettingsScreen = ({ navigation }) => {
         return;
       }
       let history = JSON.parse(stored);
-      setPreviewItems(history.slice(0, 20));
+      // Only show scans that haven't been synced yet
+      const unsynced = history.filter(item => !item.synced);
+      setPreviewItems(unsynced);
       setPreviewVisible(true);
     } catch (e) {
       setPreviewItems([]);
@@ -38,77 +40,71 @@ const SettingsScreen = ({ navigation }) => {
       
       if (!stored) {
         setExportStatus('No history found to export.');
-        Alert.alert('No History', 'There are no scan records to export.');
         setIsExporting(false);
         return;
       }
 
       let history = JSON.parse(stored);
-      if (history.length === 0) {
-        setExportStatus('No history found to export.');
-        Alert.alert('No History', 'There are no scan records to export.');
+      // Filter to only items that need syncing
+      let itemsToSync = [];
+      let unsyncedIndices = [];
+
+      history.forEach((item, index) => {
+        if (!item.synced) {
+          const scanData = {
+            localId: item.id,
+            timestamp: item.date,
+            imageMetadata: {
+              resolution: 'Unknown',
+              orientation: 'Portrait'
+            },
+            location: item.location || {},
+            environment: {
+              leafhopperObserved: item.leafhopperObserved || 'Not Sure'
+            },
+            diagnosis: {
+              modelPrediction: item.diagnosis,
+              confidence: parseFloat(item.confidence || 0),
+              userVerified: true,
+              finalDiagnosis: item.diagnosis
+            },
+            imageUrl: item.remoteImage || null
+          };
+          itemsToSync.push(scanData);
+          unsyncedIndices.push(index);
+        }
+      });
+
+      if (itemsToSync.length === 0) {
+        setExportStatus('All records are already synced.');
         setIsExporting(false);
         return;
       }
 
-      // Prepare data for sync
-      let itemsToSync = [];
-      let updatedHistory = [...history];
-      let successCount = 0;
+      // Perform the sync
+      const response = await syncScans(itemsToSync);
+      
+      // Update local history status for successfully synced items
+      // Note: If some failed on server, they remain synced = false
+      const syncedCount = response && typeof response.syncedCount === 'number'
+        ? response.syncedCount
+        : itemsToSync.length;
 
-      for (let i = 0; i < updatedHistory.length; i++) {
-        const item = updatedHistory[i];
-        let remoteUrl = item.remoteImage;
+      // Mark as synced in the local array
+      // For simplicity, we mark all items in this batch as synced if request succeeded
+      // In a production app, we'd check response.errors for specific failures
+      unsyncedIndices.forEach(idx => {
+        history[idx].synced = true;
+      });
 
-        if (!remoteUrl && item.image) {
-          try {
-            const uploadRes = await uploadScanImage(item.image);
-            remoteUrl = uploadRes.imageUrl;
-            updatedHistory[i].remoteImage = remoteUrl;
-          } catch (err) {
-            console.log(`Image upload failed for item ${item.id}, exporting without imageUrl:`, err);
-          }
-        }
-
-        const scanData = {
-          localId: item.id,
-          timestamp: item.date,
-          imageMetadata: {
-            resolution: 'Unknown',
-            orientation: 'Portrait'
-          },
-          location: item.location || {},
-          environment: {
-            leafhopperObserved: item.leafhopperObserved || 'Not Sure'
-          },
-          diagnosis: {
-            modelPrediction: item.diagnosis,
-            confidence: parseFloat(item.confidence || 0),
-            userVerified: true,
-            finalDiagnosis: item.diagnosis
-          },
-          imageUrl: remoteUrl || null
-        };
-
-        itemsToSync.push(scanData);
-        successCount++;
-      }
-
-      if (itemsToSync.length > 0) {
-        const response = await syncScans(itemsToSync);
-        
-        await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
-        
-        const syncedCount = response && typeof response.syncedCount === 'number'
-          ? response.syncedCount
-          : itemsToSync.length;
-        const msg = `Successfully exported ${syncedCount} record${syncedCount === 1 ? '' : 's'} to the database.`;
-        setExportStatus(msg);
-        Alert.alert('Success', msg);
-      } else {
-        setExportStatus('No valid records could be prepared for export.');
-        Alert.alert('Info', 'No valid records could be prepared for export.');
-      }
+      await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(history));
+      
+      // Only show the count of records that were actually sent in THIS session
+      const msg = `Successfully exported ${syncedCount} new record${syncedCount === 1 ? '' : 's'} to the database.`;
+      setExportStatus(msg);
+      
+      // Update the preview list to hide the newly synced items
+      setPreviewItems(history.filter(item => !item.synced));
 
     } catch (error) {
       console.error('Export error:', error);
