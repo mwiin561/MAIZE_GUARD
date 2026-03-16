@@ -10,7 +10,8 @@ cd $serviceDir
 
 # 2. Check for Python
 try {
-    python --version
+    $pythonVersion = & python --version
+    Write-Host "Using $pythonVersion"
 } catch {
     Write-Host "Error: Python not found. Please install Python 3.10+ from python.org"
     exit
@@ -24,15 +25,22 @@ if (-Not (Test-Path ".venv")) {
 
 # 4. Install Requirements
 Write-Host "Installing PyTorch and dependencies (this may take a minute)..."
-$pythonPath = ".\.venv\Scripts\python.exe"
-& $pythonPath -m pip install --upgrade pip
-& $pythonPath -m pip install -r requirements.txt
+$pythonExec = ".\.venv\Scripts\python.exe"
+
+# If venv creation worked, use the local python to install requirements
+if (Test-Path $pythonExec) {
+    & $pythonExec -m pip install --upgrade pip
+    & $pythonExec -m pip install -r requirements.txt
+} else {
+    Write-Host "Error: Virtual environment not found at $pythonExec"
+    exit
+}
 
 # 5. Final Instructions
 Write-Host ""
-Write-Host "Setup Complete!"
+Write-Host "✅ Setup Complete!"
 Write-Host "-------------------------------------------"
-Write-Host "1. Place your 'model.pt' file in 'backend/tflite_service/' folder."
-Write-Host "2. Start the AI service with: "
-Write-Host ".\.venv\Scripts\python.exe app.py"
+Write-Host "1. Ensure 'model.pt' is in 'backend/tflite_service/'"
+Write-Host "2. Start the AI service with:"
+Write-Host "   .\.venv\Scripts\python.exe app.py"
 Write-Host "-------------------------------------------"

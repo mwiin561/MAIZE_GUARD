@@ -1,9 +1,6 @@
-# TFLite service for v2 model. Use Python 3.11 on Windows: py -3.11 -m venv .venv
-fFlask==3.0.0
+Flask==3.0.0
 Pillow==10.1.0
 numpy==1.26.2
 torch==2.1.1
 torchvision==0.16.1
 requests==2.31.0
-7+ (FULLY_CONNECTED op v12); need TF 2.17+ to load it
-tensorflow>=2.17.0

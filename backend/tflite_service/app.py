@@ -11,7 +11,11 @@ from flask import Flask, request, jsonify
 
 # Path configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(SCRIPT_DIR, "model.pt")
+# Check for both names, prioritize the one found in the folder
+MODEL_PATH = os.path.join(SCRIPT_DIR, "model_torchscript.pt")
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = os.path.join(SCRIPT_DIR, "model.pt")
+
 INPUT_SIZE = 224
 
 app = Flask(__name__)
@@ -27,15 +31,20 @@ preprocess = transforms.Compose([
 def load_model():
     global model
     if not os.path.isfile(MODEL_PATH):
-        print(f"ERROR: PyTorch model not found: {MODEL_PATH}")
+        print(f"❌ Error: Model file not found. Please place 'model.pt' or 'model_torchscript.pt' in: {SCRIPT_DIR}")
         return False
     try:
-        # Load the model (expecting a scripted or full model for simplicity)
-        # If it's just weights, we'd need the class definition.
-        # We'll use 'torch.load' with 'weights_only=False' for flexibility with .pt files
-        model = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
+        # Use torch.jit.load for TorchScript models (.pt files usually are)
+        # falling back to torch.load if that fails
+        try:
+            model = torch.jit.load(MODEL_PATH, map_location=torch.device('cpu'))
+            print("✨ Loaded Model using TorchScript (jit)")
+        except Exception:
+            model = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
+            print("✅ Loaded Model using standard torch.load")
+        
         model.eval()
-        print(f"✅ Loaded PyTorch model: {MODEL_PATH}")
+        print(f"🚀 AI Service Ready with: {os.path.basename(MODEL_PATH)}")
         return True
     except Exception as e:
         print(f"❌ Failed to load model: {e}")

@@ -7,8 +7,11 @@ const connectionString = process.env.DATABASE_URL;
 const pool = new Pool({
   connectionString: connectionString,
   ssl: {
-    rejectUnauthorized: false // Required for Neon and many hosted PostgreSQL services
-  }
+    rejectUnauthorized: false
+  },
+  connectionTimeoutMillis: 15000, // Wait 15 seconds
+  idleTimeoutMillis: 30000,
+  max: 10
 });
 
 pool.on('connect', () => {

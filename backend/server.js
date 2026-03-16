@@ -6,9 +6,9 @@ const db = require('./config/db');
 // Database pool check
 db.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error('Initial PostgreSQL connection failed:', err.message);
+    console.error('⚠️ Initial DB check failed (will retry on request):', err.message);
   } else {
-    console.log('PostgreSQL initial query successful.');
+    console.log('✅ Connected to Neon DB successfully!');
   }
 });
 
@@ -20,6 +20,11 @@ const path = require('path');
 
 // Middleware
 app.use(cors());
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
 // Allow large JSON bodies for upload-image-web (base64 images) and sync batches
 app.use(express.json({ limit: '25mb' }));
 

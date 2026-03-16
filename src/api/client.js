@@ -9,7 +9,9 @@ import { Platform } from 'react-native';
 const DEV_BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST || '192.168.110.211';
 const PRODUCTION_URL = 'https://maizeguard-backend-1.onrender.com/api';
 
-const BASE_URL = PRODUCTION_URL;
+const BASE_URL = Platform.OS === 'web' 
+  ? 'http://localhost:5001/api' 
+  : `http://${DEV_BACKEND_HOST}:5001/api`;
 
 export const API_URL = BASE_URL;
 
