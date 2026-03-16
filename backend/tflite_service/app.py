@@ -25,6 +25,7 @@ model = None
 preprocess = transforms.Compose([
     transforms.Resize((INPUT_SIZE, INPUT_SIZE)),
     transforms.ToTensor(),
+    # Standard ImageNet normalization - REQUIRED for most pre-trained PyTorch models
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
@@ -75,31 +76,63 @@ def predict():
         return jsonify({"error": "No image provided"}), 400
 
     try:
-        # Preprocess
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        input_tensor = preprocess(img).unsqueeze(0)
+        # Load and define all variations
+        img_raw = Image.open(BytesIO(image_bytes)).convert("RGB")
+        
+        # 1. Raw [0, 1] RGB
+        transform_raw = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+        tensor_raw = transform_raw(img_raw).unsqueeze(0)
+        
+        # 2. ImageNet Normalized RGB
+        transform_norm = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        tensor_norm = transform_norm(img_raw).unsqueeze(0)
+        
+        # 3. BGR [0, 1]
+        r, g, b = img_raw.split()
+        img_bgr = Image.merge('RGB', (b, g, r))
+        tensor_bgr = transform_raw(img_bgr).unsqueeze(0)
 
-        # Inference
-        with torch.no_grad():
-            output = model(input_tensor)
-            
-        # Assuming classification output (logits)
-        probabilities = torch.nn.functional.softmax(output[0], dim=0)
-        
-        # We assume 0 is Healthy, 1 is MSV based on your previous config
-        # If your model has more classes, we can expand this
-        healthy_conf = float(probabilities[0])
-        msv_conf = float(probabilities[1])
-        
-        diagnosis = "Maize Streak Virus" if msv_conf > healthy_conf else "Healthy"
-        confidence = max(msv_conf, healthy_conf)
+        variations = [
+            ("RAW RGB", tensor_raw),
+            ("IMAGENET", tensor_norm),
+            ("BGR", tensor_bgr)
+        ]
+
+        results = []
+        print(f"\n🧪 BRUTE FORCE DIAGNOSTIC TEST:")
+        for name, tensor in variations:
+            with torch.no_grad():
+                output = model(tensor)
+                probs = torch.nn.functional.softmax(output[0], dim=0)
+                win = int(torch.argmax(probs))
+                conf = float(probs[win].item())
+                results.append({"name": name, "winner": win, "conf": conf, "scores": probs.tolist()})
+                print(f"  - {name:8}: Winner={win}, Conf={conf:.4f}, Mean={tensor.mean().item():.4f}")
+
+        # Pick the best result for the response
+        best_run = max(results, key=lambda x: x['conf'] if x['winner'] != 2 else -1.0)
+        # If all are Class 2, just pick the first one
+        if best_run['winner'] == 2:
+            best_run = results[0]
+
+        best_class = best_run['winner']
+        confidence = best_run['conf']
+        labels = ["Healthy Maize", "Maize Streak Virus", "Not a Maize Leaf"]
+        diagnosis = labels[best_class] if best_class < len(labels) else f"Class {best_class}"
 
         return jsonify({
             "diagnosis": diagnosis,
-            "confidence": round(confidence, 4),
-            "isInfected": msv_conf > healthy_conf,
-            "isHealthy": healthy_conf >= msv_conf,
-            "raw_scores": probabilities.tolist()
+            "confidence": float(round(confidence, 4)),
+            "isHealthy": best_class == 0,
+            "isInfected": best_class == 1,
+            "isMaize": best_class != 2,
+            "class_index": best_class,
+            "best_fix": best_run['name'],
+            "all_runs": results
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

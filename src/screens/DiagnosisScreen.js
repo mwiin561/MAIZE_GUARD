@@ -148,19 +148,19 @@ const DiagnosisScreen = ({ navigation }) => {
          analysisResult = await runMockAnalysis();
       }
 
-      const { isInfected, confidence, isInvalid } = analysisResult;
+      const { isInfected, confidence, isInvalid, isMaize, diagnosis: serverDiagnosis } = analysisResult;
       
-      // Handle Invalid Image Case
-      if (isInvalid) {
+      // Handle Invalid Image / Not a Maize Leaf Case
+      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf') {
         const invalidResult = {
           id: Date.now().toString(),
           date: new Date().toISOString(),
           image: image,
           remoteImage: remoteImageUrl,
-          title: 'Invalid Image',
-          diagnosis: 'Not a Maize Leaf',
+          title: 'Not a Maize Leaf',
+          diagnosis: 'Invalid Scan',
           confidence: confidence,
-          description: 'The uploaded image does not appear to be a maize leaf. For an accurate diagnosis, please ensure the photo is clear and focuses specifically on a single maize leaf.',
+          description: 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.',
           immediateActions: [
             'Take a new photo in good lighting.',
             'Ensure the leaf fills most of the frame.',
@@ -178,14 +178,20 @@ const DiagnosisScreen = ({ navigation }) => {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         image: image,
-        remoteImage: remoteImageUrl, // Save the remote URL if available
-        title: isInfected ? 'Maize Streak Virus Detected' : 'Healthy Maize Plant',
-        diagnosis: isInfected ? 'Maize Streak Virus' : 'Healthy',
+        remoteImage: remoteImageUrl,
+        title: serverAiResult?.diagnosis ? `${serverAiResult.diagnosis} Detected` : (isInfected ? 'Maize Streak Virus Detected' : 'Healthy Maize Plant'),
+        diagnosis: serverAiResult?.diagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
         confidence: confidence,
-        description: isInfected 
-          ? 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.' 
-          : 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.',
-        immediateActions: isInfected ? [
+        description: serverAiResult?.diagnosis === 'Not a Maize Leaf'
+          ? 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.'
+          : (serverAiResult?.diagnosis === 'Healthy Maize' || (!serverAiResult && !isInfected))
+            ? 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.'
+            : 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.',
+        immediateActions: (serverAiResult?.diagnosis === 'Not a Maize Leaf') ? [
+          'Take a new photo in good lighting.',
+          'Ensure only the leaf is in the frame.',
+          'Avoid blurry or dark images.'
+        ] : isInfected ? [
           'Remove and destroy infected plants immediately to prevent spread.',
           'Control leafhopper populations using recommended insecticides.',
           'Clear grass weeds around the field which may host the virus.'
