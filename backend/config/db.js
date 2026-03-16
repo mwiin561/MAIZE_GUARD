@@ -1,21 +1,22 @@
-const { Pool } = require('pg');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+const ws = require('ws');
 require('dotenv').config();
 
-// Use connection string from environment variables
+// Configure neon to use the 'ws' package for websockets
+// This allows connecting via port 443, bypassing ISP blocks on port 5432
+neonConfig.webSocketConstructor = ws;
+
 const connectionString = process.env.DATABASE_URL;
 
 const pool = new Pool({
   connectionString: connectionString,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  connectionTimeoutMillis: 15000, // Wait 15 seconds
+  connectionTimeoutMillis: 15000, 
   idleTimeoutMillis: 30000,
   max: 10
 });
 
 pool.on('connect', () => {
-  console.log('Connected to PostgreSQL Database (Neon)!');
+  console.log('✅ Connected to Neon DB via Websockets! (Port 443)');
 });
 
 pool.on('error', (err) => {
