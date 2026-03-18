@@ -77,12 +77,28 @@ const DiagnosisScreen = ({ navigation }) => {
       try {
         const photo = await cameraRef.current.takePictureAsync({
             quality: 1,
-            skipProcessing: true, // Speed up capture
+            skipProcessing: true,
         });
         
-        const optimizedUri = await processImage(photo.uri);
-        setImage(optimizedUri);
+        // --- Square Crop Implementation ---
+        // Get dimensions to calculate the center square
+        const { width, height } = photo;
+        const size = Math.min(width, height);
+        const originX = (width - size) / 2;
+        const originY = (height - size) / 2;
+
+        const manipResult = await manipulateAsync(
+          photo.uri,
+          [
+            { crop: { originX, originY, width: size, height: size } },
+            { resize: { width: 1024, height: 1024 } } // High-res square for user preview
+          ],
+          { compress: 0.8, format: SaveFormat.JPEG }
+        );
+
+        setImage(manipResult.uri);
       } catch (e) {
+        console.error('Capture error:', e);
         Alert.alert('Error', 'Failed to take picture');
       }
     }
@@ -150,17 +166,31 @@ const DiagnosisScreen = ({ navigation }) => {
 
       const { isInfected, confidence, isInvalid, isMaize, diagnosis: serverDiagnosis } = analysisResult;
       
+      // Calculate MSV Stage if infected
+      let diseaseStage = '';
+      if (isInfected || serverDiagnosis === 'MSV' || serverDiagnosis === 'Maize Streak Virus' || (serverDiagnosis && serverDiagnosis.includes('Virus'))) {
+        if (confidence > 0.64) {
+          diseaseStage = 'Late Stage';
+        } else if (confidence < 0.46) {
+          diseaseStage = 'Early Stage';
+        } else {
+          diseaseStage = 'Intermediate Stage';
+        }
+      }
+
       // Handle Invalid Image / Not a Maize Leaf Case
-      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf') {
+      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf' || serverDiagnosis === 'Uncertain Scan') {
         const invalidResult = {
           id: Date.now().toString(),
           date: new Date().toISOString(),
           image: image,
           remoteImage: remoteImageUrl,
-          title: 'Not a Maize Leaf',
+          title: serverDiagnosis === 'Uncertain Scan' ? 'Uncertain Scan' : 'Not a Maize Leaf',
           diagnosis: 'Invalid Scan',
           confidence: confidence,
-          description: 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.',
+          description: serverDiagnosis === 'Uncertain Scan' 
+            ? 'The AI is not sure enough to give a result. Please take a clearer photo.'
+            : 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.',
           immediateActions: [
             'Take a new photo in good lighting.',
             'Ensure the leaf fills most of the frame.',
@@ -171,7 +201,7 @@ const DiagnosisScreen = ({ navigation }) => {
         };
         setResult(invalidResult);
         setAnalyzing(false);
-        return; // Don't save invalid images to history/cloud
+        return; 
       }
 
       const diagnosisResult = {
@@ -179,8 +209,9 @@ const DiagnosisScreen = ({ navigation }) => {
         date: new Date().toISOString(),
         image: image,
         remoteImage: remoteImageUrl,
-        title: serverAiResult?.diagnosis ? `${serverAiResult.diagnosis} Detected` : (isInfected ? 'Maize Streak Virus Detected' : 'Healthy Maize Plant'),
-        diagnosis: serverAiResult?.diagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
+        title: serverDiagnosis ? `${serverDiagnosis} ${diseaseStage ? '(' + diseaseStage + ')' : ''}` : (isInfected ? `MSV Detected (${diseaseStage})` : 'Healthy Maize Plant'),
+        diagnosis: serverDiagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
+        diseaseStage: diseaseStage, // Save the stage
         confidence: confidence,
         description: serverAiResult?.diagnosis === 'Not a Maize Leaf'
           ? 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.'
@@ -392,7 +423,7 @@ const DiagnosisScreen = ({ navigation }) => {
               <View style={styles.diagnosisRow}>
                 <Text style={styles.diagnosisLabel}>DIAGNOSIS RESULTS</Text>
                 <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{(result.confidence * 100).toFixed(0)}% Confidence</Text>
+                  <Text style={styles.confidenceText}>{Math.round(result.confidence * 100)}% Confidence</Text>
                 </View>
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>
@@ -439,6 +470,25 @@ const DiagnosisScreen = ({ navigation }) => {
         <View style={{ flex: 1 }}>
             <View style={styles.camera}>
                 <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} facing="back" />
+                
+                {/* Square Scanning Overlay */}
+                <View style={styles.overlayContainer}>
+                  <View style={styles.blurArea} />
+                  <View style={styles.middleRow}>
+                    <View style={styles.blurArea} />
+                    <View style={styles.focusSquare}>
+                      <View style={[styles.corner, styles.topLeft]} />
+                      <View style={[styles.corner, styles.topRight]} />
+                      <View style={[styles.corner, styles.bottomLeft]} />
+                      <View style={[styles.corner, styles.bottomRight]} />
+                    </View>
+                    <View style={styles.blurArea} />
+                  </View>
+                  <View style={styles.blurArea}>
+                    <Text style={styles.hintText}>Center the leaf in the square</Text>
+                  </View>
+                </View>
+
                 <View style={styles.cameraControls}>
                     <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
                         <View style={styles.captureInner} />
@@ -625,6 +675,49 @@ const styles = StyleSheet.create({
 
   
   // Camera & Preview Styles (Preserved)
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blurArea: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  middleRow: {
+    flexDirection: 'row',
+    height: 250, // Matches focusSquare height
+  },
+  focusSquare: {
+    width: 250,
+    height: 250,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  corner: {
+    position: 'absolute',
+    width: 25,
+    height: 25,
+    borderColor: '#4CAF50',
+    borderWidth: 4,
+  },
+  topLeft: { top: -2, left: -2, borderBottomWidth: 0, borderRightWidth: 0 },
+  topRight: { top: -2, right: -2, borderBottomWidth: 0, borderLeftWidth: 0 },
+  bottomLeft: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0 },
+  bottomRight: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0 },
+  hintText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Roboto_500Medium',
+    marginTop: 20,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
   permButton: {
       backgroundColor: '#1a73e8',
       padding: 12,

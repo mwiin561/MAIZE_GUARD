@@ -2,63 +2,78 @@ import os
 import sys
 import base64
 import re
+import json
 from io import BytesIO
 import torch
-import torch.nn as nn
-from torchvision import transforms, models
+from torchvision import transforms
 from PIL import Image
 from flask import Flask, request, jsonify
 
 # Path configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Check for both names, prioritize the one found in the folder
 MODEL_PATH = os.path.join(SCRIPT_DIR, "model_torchscript.pt")
-if not os.path.exists(MODEL_PATH):
-    MODEL_PATH = os.path.join(SCRIPT_DIR, "model.pt")
+INFO_PATH = os.path.join(SCRIPT_DIR, "model_info.json")
 
-INPUT_SIZE = 224
+# Default Parameters (The "Lean" from previous successful deployment)
+# 1. Classes: Healthy (0), MSV (1), Unknown (2)
+# 2. Input: 224x224 RGB
+# 3. Preprocessing: Resize (Bilinear) + ToTensor (ONLY)
+# 4. Confidence Threshold: 0.7
+CONFIG = {
+    "input_size": [224, 224],
+    "class_names": ["Healthy", "MSV", "Unknown"],
+    "confidence_threshold": 0.7,
+    "normalize": False,
+    "interpolation": "bilinear"
+}
 
 app = Flask(__name__)
-
-# Global model and transform
 model = None
-preprocess = transforms.Compose([
-    transforms.Resize((INPUT_SIZE, INPUT_SIZE)),
-    transforms.ToTensor(),
-    # Standard ImageNet normalization - REQUIRED for most pre-trained PyTorch models
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+
+def load_config():
+    global CONFIG
+    if os.path.exists(INFO_PATH):
+        try:
+            with open(INFO_PATH, 'r') as f:
+                data = json.load(f)
+                # Merge user-provided specifics
+                if 'class_names' in data: CONFIG['class_names'] = data['class_names']
+                if 'confidence_threshold' in data: CONFIG['confidence_threshold'] = data['confidence_threshold']
+                if 'preprocessing' in data:
+                    prep = data['preprocessing']
+                    CONFIG['normalize'] = prep.get('normalize', False)
+                    CONFIG['input_size'] = prep.get('resize', [224, 224])
+                    CONFIG['interpolation'] = prep.get('interpolation', 'bilinear')
+            print("📜 Inference parameters loaded from config.")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not parse config, using defaults: {e}")
 
 def load_model():
     global model
     if not os.path.isfile(MODEL_PATH):
-        print(f"❌ Error: Model file not found. Please place 'model.pt' or 'model_torchscript.pt' in: {SCRIPT_DIR}")
+        print(f"❌ Error: Model file missing: {MODEL_PATH}")
         return False
     try:
-        # Use torch.jit.load for TorchScript models (.pt files usually are)
-        # falling back to torch.load if that fails
-        try:
-            model = torch.jit.load(MODEL_PATH, map_location=torch.device('cpu'))
-            print("✨ Loaded Model using TorchScript (jit)")
-        except Exception:
-            model = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
-            print("✅ Loaded Model using standard torch.load")
-        
+        model = torch.jit.load(MODEL_PATH, map_location=torch.device('cpu'))
         model.eval()
-        print(f"🚀 AI Service Ready with: {os.path.basename(MODEL_PATH)}")
+        print(f"✨ Model Ready: {os.path.basename(MODEL_PATH)}")
         return True
     except Exception as e:
-        print(f"❌ Failed to load model: {e}")
+        print(f"❌ Model Load Failure: {e}")
         return False
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok" if model else "model_not_loaded", "type": "pytorch"})
+    return jsonify({
+        "status": "ok" if model else "error",
+        "type": "pytorch_jit",
+        "parameters": CONFIG
+    })
 
 @app.route("/predict", methods=["POST"])
 def predict():
     if not model:
-        return jsonify({"error": "Model not loaded"}), 503
+        return jsonify({"error": "Model initialization failed"}), 503
 
     image_bytes = None
     if request.is_json:
@@ -66,8 +81,7 @@ def predict():
         image_data = data.get("imageData")
         if image_data and isinstance(image_data, str):
             m = re.match(r"^data:(.+);base64,(.+)$", image_data)
-            if m:
-                image_bytes = base64.b64decode(m.group(2))
+            if m: image_bytes = base64.b64decode(m.group(2))
 
     if image_bytes is None and "image" in request.files:
         image_bytes = request.files["image"].read()
@@ -76,73 +90,73 @@ def predict():
         return jsonify({"error": "No image provided"}), 400
 
     try:
-        # Load and define all variations
-        img_raw = Image.open(BytesIO(image_bytes)).convert("RGB")
+        # Step 1: Open and Convert
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
         
-        # 1. Raw [0, 1] RGB
-        transform_raw = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
-        tensor_raw = transform_raw(img_raw).unsqueeze(0)
-        
-        # 2. ImageNet Normalized RGB
-        transform_norm = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        tensor_norm = transform_norm(img_raw).unsqueeze(0)
-        
-        # 3. BGR [0, 1]
-        r, g, b = img_raw.split()
-        img_bgr = Image.merge('RGB', (b, g, r))
-        tensor_bgr = transform_raw(img_bgr).unsqueeze(0)
+        # Step 2: Set Interpolation based on "Golden Recipe"
+        interp = Image.BILINEAR
+        if CONFIG.get('interpolation') == 'nearest': interp = Image.NEAREST
+        elif CONFIG.get('interpolation') == 'bicubic': interp = Image.BICUBIC
 
-        # 4. Raw [0, 255] (No scaling)
-        tensor_255 = tensor_raw * 255.0
-
-        variations = [
-            ("RAW RGB", tensor_raw),
-            ("IMAGENET", tensor_norm),
-            ("BGR", tensor_bgr),
-            ("RAW 255", tensor_255)
+        # Step 3: Build Minimalist Transform (No Norm is key here)
+        t_list = [
+            transforms.Resize(tuple(CONFIG['input_size']), interpolation=interp),
+            transforms.ToTensor()
         ]
+        
+        if CONFIG.get('normalize'):
+            t_list.append(transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+        
+        preprocess = transforms.Compose(t_list)
+        input_tensor = preprocess(img).unsqueeze(0)
 
-        results = []
-        print(f"\n🧪 BRUTE FORCE DIAGNOSTIC TEST:")
-        for name, tensor in variations:
-            with torch.no_grad():
-                output = model(tensor)
-                probs = torch.nn.functional.softmax(output[0], dim=0)
-                win = int(torch.argmax(probs))
-                conf = float(probs[win].item())
-                results.append({"name": name, "winner": win, "conf": conf, "scores": probs.tolist()})
-                print(f"  - {name:8}: Winner={win}, Conf={conf:.4f}")
+        # Step 4: Inference
+        with torch.no_grad():
+            output = model(input_tensor)
+            # Softmax is required to interpret the 3 output classes correctly
+            probs = torch.nn.functional.softmax(output[0], dim=0)
+            
+            top_idx = int(torch.argmax(probs))
+            conf = float(probs[top_idx].item())
+            
+        labels = CONFIG.get("class_names", ["Healthy", "MSV", "Unknown"])
+        prediction = labels[top_idx] if top_idx < len(labels) else "Unknown"
 
-        # Pick the best result for the response
-        best_run = max(results, key=lambda x: x['conf'] if x['winner'] != 2 else -1.0)
-        # If all are Class 2, just pick the first one
-        if best_run['winner'] == 2:
-            best_run = results[0]
+        # Step 5: Final Logic (Applying the Rejection Rules)
+        # Class 2 (Unknown) is a manual rejection.
+        # Low confidence (<0.7) is a system rejection.
+        
+        threshold = CONFIG.get("confidence_threshold", 0.7)
+        
+        if prediction == "Unknown":
+            diagnosis = "Not a Maize Leaf"
+            is_valid = False
+        elif conf < threshold:
+            diagnosis = "Uncertain Scan"
+            is_valid = False
+        else:
+            diagnosis = prediction
+            is_valid = True
 
-        best_class = best_run['winner']
-        confidence = best_run['conf']
-        labels = ["Healthy Maize", "Maize Streak Virus", "Not a Maize Leaf"]
-        diagnosis = labels[best_class] if best_class < len(labels) else f"Class {best_class}"
+        print(f"🔮 Prediction: {prediction} ({conf:.4f}) -> {diagnosis}")
 
         return jsonify({
             "diagnosis": diagnosis,
-            "confidence": float(round(confidence, 4)),
-            "isHealthy": best_class == 0,
-            "isInfected": best_class == 1,
-            "isMaize": best_class != 2,
-            "class_index": best_class,
-            "best_fix": best_run['name'],
-            "all_runs": results
+            "raw_class": prediction,
+            "confidence": float(round(conf, 4)),
+            "isHealthy": diagnosis == "Healthy",
+            "isInfected": diagnosis == "MSV",
+            "isMaize": is_valid,
+            "class_index": top_idx,
+            "scores": probs.tolist()
         })
     except Exception as e:
+        print(f"❌ Execution Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
+    load_config()
     if not load_model():
-        print("⚠️ Model file missing. Place 'model.pt' in this folder.")
+        sys.exit(1)
     port = int(os.environ.get("PORT", 5003))
     app.run(host="0.0.0.0", port=port)

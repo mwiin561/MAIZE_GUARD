@@ -1,0 +1,17 @@
+# Ignore backend and local test environments
+backend/
+c:/mg_test/
+node_modules/
+.venv/
+.git/
+.expo/
+dist/
+web-build/
+
+# Ignore test scripts
+verify_tflite_node.js
+test_model.html
+
+# Ignore artifacts
+brain/
+*.md

@@ -1,0 +1,22 @@
+{
+  "model_file": "model_torchscript.pt",
+  "class_names": ["Healthy", "MSV", "Unknown"],
+  "input_size": [224, 224],
+  "color_mode": "RGB",
+  "preprocessing": {
+    "resize": [224, 224],
+    "interpolation": "bilinear",
+    "to_tensor": true,
+    "normalize": false
+  },
+  "confidence_threshold": 0.7,
+  "rejection_rules": {
+    "if_predicted_unknown": "Unknown",
+    "if_confidence_below_threshold": "Uncertain"
+  },
+  "output_type": "logits",
+  "postprocessing": {
+    "apply_softmax": true,
+    "argmax_for_prediction": true
+  }
+}

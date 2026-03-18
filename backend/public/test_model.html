@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Verification</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite/dist/tf-tflite.min.js"></script>
+</head>
+<body>
+    <h1>TFLite Model Verification (Offline Shoe-Fit Test)</h1>
+    <div id="status">Loading libraries...</div>
+    <div id="results" style="margin-top: 20px; font-weight: bold; font-family: monospace; white-space: pre;"></div>
+    
+    <script>
+        async function runVerification() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            
+            try {
+                statusEl.innerText = "Loading Model...";
+                // Load the TFLite model via URL
+                const model = await tflite.loadTFLiteModel('http://localhost:5002/public/models/v2/model.tflite');
+                
+                statusEl.innerText = "Processing Image...";
+                // Load image from backend
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.src = 'http://localhost:5002/public/uploads/scan-1773743566985.jpg';
+                
+                await new Promise((resolve) => img.onload = resolve);
+                
+                // --- Golden Recipe (Bilinear, No Norm) ---
+                const tensor = tf.browser.fromPixels(img)
+                    .resizeBilinear([224, 224])
+                    .toFloat()
+                    .div(255.0)
+                    .expandDims(0);
+                
+                statusEl.innerText = "Running Inference...";
+                const output = model.predict(tensor);
+                const predictions = await output.data();
+                
+                const labels = ["Healthy", "MSV", "Unknown"];
+                const scores = Array.from(predictions);
+                const winIdx = scores.indexOf(Math.max(...scores));
+                
+                const report = [
+                    "--- TFLite Results ---",
+                    `Result Index: ${winIdx}`,
+                    `Confidence: ${(scores[winIdx] * 100).toFixed(2)}%`,
+                    `Diagnosis Label: ${labels[winIdx]}`,
+                    `Raw Scores: [${scores.map(s => s.toFixed(4)).join(', ')}]`,
+                    "",
+                    winIdx === 1 ? "✅ THE SHOE FITS! The model correctly identifies MSV." : "❌ DISCREPANCY! The model does NOT match the PyTorch result."
+                ].join('\n');
+                
+                resultsEl.innerText = report;
+                statusEl.innerText = "Test Complete.";
+                console.log("FINAL_REPORT_START");
+                console.log(report);
+                console.log("FINAL_REPORT_END");
+            } catch (err) {
+                statusEl.innerText = "Error: " + err.message;
+                resultsEl.innerText = err.stack;
+            }
+        }
+        
+        runVerification();
+    </script>
+</body>
+</html>
