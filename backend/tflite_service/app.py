@@ -96,10 +96,14 @@ def predict():
         img_bgr = Image.merge('RGB', (b, g, r))
         tensor_bgr = transform_raw(img_bgr).unsqueeze(0)
 
+        # 4. Raw [0, 255] (No scaling)
+        tensor_255 = tensor_raw * 255.0
+
         variations = [
             ("RAW RGB", tensor_raw),
             ("IMAGENET", tensor_norm),
-            ("BGR", tensor_bgr)
+            ("BGR", tensor_bgr),
+            ("RAW 255", tensor_255)
         ]
 
         results = []
@@ -111,7 +115,7 @@ def predict():
                 win = int(torch.argmax(probs))
                 conf = float(probs[win].item())
                 results.append({"name": name, "winner": win, "conf": conf, "scores": probs.tolist()})
-                print(f"  - {name:8}: Winner={win}, Conf={conf:.4f}, Mean={tensor.mean().item():.4f}")
+                print(f"  - {name:8}: Winner={win}, Conf={conf:.4f}")
 
         # Pick the best result for the response
         best_run = max(results, key=lambda x: x['conf'] if x['winner'] != 2 else -1.0)
