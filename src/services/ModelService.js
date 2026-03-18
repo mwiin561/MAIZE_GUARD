@@ -6,7 +6,6 @@ import { Platform } from 'react-native';
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 
-const DEFAULT_BACKEND_URL = 'https://maizeguard-backend-1.onrender.com';
 const INPUT_SIZE = 224;
 // Labels match the model's output classes
 const LABELS = ["Healthy", "MSV", "Unknown"];
@@ -65,25 +64,27 @@ class ModelService {
 
   /**
    * Predict from imageUri.
-   * Tries offline ONNX first, falls back to cloud backend.
+   * Tries Flask backend (port 5003) first, falls back to offline ONNX, then mock.
    */
   async predict(imageUri) {
-    // — Try on-device inference first —
+    // — Try Flask backend first (local PyTorch model on port 5003) —
+    try {
+      return await this._runNetworkInference(imageUri);
+    } catch (e) {
+      console.warn('⚠️ Flask backend failed, trying offline ONNX:', e?.message);
+    }
+    
+    // — Fallback to on-device ONNX inference —
     if (this.isReady && this.onnxSession) {
       try {
         return await this._runOnnxInference(imageUri);
       } catch (e) {
-        console.warn('⚠️ ONNX inference failed, falling back to cloud:', e?.message);
+        console.warn('⚠️ ONNX inference also failed:', e?.message);
       }
     }
     
-    // — Cloud fallback —
-    try {
-      return await this._runNetworkInference(imageUri);
-    } catch (e) {
-      console.warn('⚠️ Cloud inference also failed:', e?.message);
-      return this._getDevMockResult();
-    }
+    // — Final fallback to mock —
+    return this._getDevMockResult();
   }
 
   /**
