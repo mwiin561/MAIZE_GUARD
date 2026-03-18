@@ -13,7 +13,13 @@ const BASE_URL = __DEV__
   ? (Platform.OS === 'web' ? 'http://localhost:5001/api' : `http://${DEV_BACKEND_HOST}:5001/api`)
   : PRODUCTION_URL;
 
+// TFLite Model Service (PyTorch backend on port 5003)
+const TFLITE_SERVICE_URL = __DEV__
+  ? (Platform.OS === 'web' ? 'http://localhost:5003' : `http://${DEV_BACKEND_HOST}:5003`)
+  : 'https://maizeguard-backend-1.onrender.com';
+
 export const API_URL = BASE_URL;
+export const MODEL_SERVICE_URL = TFLITE_SERVICE_URL;
 
 function handleAuthError(response, data) {
   return response.status === 401 && (data && (data.msg === 'Token is not valid' || data.msg === 'No token, authorization denied'));

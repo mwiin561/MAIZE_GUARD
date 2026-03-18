@@ -150,11 +150,10 @@ class ModelService {
   }
 
   /**
-   * Cloud fallback — sends image to Render backend.
+   * Network inference — sends image to local Flask backend (port 5003).
    */
   async _runNetworkInference(imageUri) {
-    const { API_URL } = require('../api/client');
-    const baseUrl = (API_URL || DEFAULT_BACKEND_URL + '/api').replace(/\/api\/?$/, '');
+    const { MODEL_SERVICE_URL } = require('../api/client');
 
     const formData = new FormData();
     formData.append('image', {
@@ -163,7 +162,7 @@ class ModelService {
       name: 'scan.jpg',
     });
 
-    const response = await fetch(`${baseUrl}/predict`, {
+    const response = await fetch(`${MODEL_SERVICE_URL}/predict`, {
       method: 'POST',
       body: formData,
     });
@@ -173,14 +172,16 @@ class ModelService {
     const data = await response.json();
     const label = data.diagnosis || 'Unknown';
     const confidence = data.confidence || 0;
+    const isMaize = data.isMaize !== undefined ? data.isMaize : true;
 
-    console.log(`☁️ Cloud Result: ${label} @ ${(confidence * 100).toFixed(1)}%`);
+    console.log(`🔮 Flask Backend Result: ${label} @ ${(confidence * 100).toFixed(1)}%`);
     return {
-      isInfected: label === 'MSV',
+      isInfected: data.isInfected || label === 'MSV',
       confidence,
       diagnosis: label,
-      isMaize: label !== 'Unknown',
-      source: 'cloud',
+      isMaize,
+      isHealthy: data.isHealthy || label === 'Healthy',
+      source: 'flask-backend',
     };
   }
 
