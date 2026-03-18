@@ -42,6 +42,40 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/scans', require('./routes/scans'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Top-level /predict endpoint for mobile APK inference
+const multer = require('multer');
+const fs = require('fs');
+const uploadPredict = multer({ dest: 'uploads/' });
+app.post('/predict', uploadPredict.single('image'), async (req, res) => {
+  try {
+    const serviceUrl = process.env.TFLITE_SERVICE_URL || 'http://localhost:5003';
+    let base64Image;
+
+    if (req.file) {
+      const buf = fs.readFileSync(req.file.path);
+      base64Image = `data:image/jpeg;base64,${buf.toString('base64')}`;
+      fs.unlinkSync(req.file.path); // clean up
+    } else if (req.body && req.body.imageData) {
+      base64Image = req.body.imageData;
+    } else {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    const pyRes = await fetch(`${serviceUrl}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageData: base64Image }),
+    });
+
+    if (!pyRes.ok) throw new Error(`AI service: ${pyRes.status}`);
+    const data = await pyRes.json();
+    res.json(data);
+  } catch (e) {
+    console.error('Predict error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
