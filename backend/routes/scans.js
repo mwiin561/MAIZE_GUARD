@@ -7,37 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
 
-// Inference setup (TFLite/TFjs)
-let tfliteModel = null;
-let tfjsModel = null;
-let tf = null;
-
-const loadTFLite = () => {
-  try {
-    const tflite = require('tflite-node');
-    const modelPath = path.join(__dirname, '..', 'public', 'models', 'v2', 'model.tflite');
-    if (fs.existsSync(modelPath)) {
-      tfliteModel = new tflite.TFLiteModel(modelPath);
-      console.log('AI Model (v2 TFLite) loaded');
-    }
-  } catch (err) {
-    console.warn('TFLite unavailable:', err.message);
-  }
-};
-loadTFLite();
-
-// (TFjs fallback logic omitted for brevity, assuming same structure)
-try { tf = require('@tensorflow/tfjs-node'); } catch (_) { tf = null; }
-
-function parsePredictions(predictions) {
-  if (!predictions || predictions.length < 2) return null;
-  const healthyConf = Number(predictions[0]);
-  const msvConf = Number(predictions[1]);
-  return {
-    diagnosis: msvConf > 0.5 ? 'Maize Streak Virus' : 'Healthy',
-    confidence: Math.max(msvConf, healthyConf)
-  };
-}
+// AI Inference is handled by Flask PyTorch service (port 5003)
+// No local model loading needed - all predictions go through Flask backend
 
 const runInference = async (imagePath) => {
   try {

@@ -36,9 +36,23 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# Native projects — track android/ (and optionally ios/) in git for EAS so cloud builds
+# use the same Gradle layout as local `expo prebuild`, avoiding "No variants exist" on release.
+# See docs/EAS_ANDROID_GRADLE_VARIANTS.md
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/app/release/
+
+ios/Pods/
+ios/build/
+ios/**/*.xcworkspace/xcuserdata/
+ios/**/*.xcodeproj/xcuserdata/
+ios/.xcode.env.local
 
 # Python virtual environment (for TF.js model export)
 **/.venv/

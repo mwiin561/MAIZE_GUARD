@@ -44,22 +44,22 @@ def load_config():
                     CONFIG['normalize'] = prep.get('normalize', False)
                     CONFIG['input_size'] = prep.get('resize', [224, 224])
                     CONFIG['interpolation'] = prep.get('interpolation', 'bilinear')
-            print("📜 Inference parameters loaded from config.")
+            print("Inference parameters loaded from config.")
         except Exception as e:
-            print(f"⚠️ Warning: Could not parse config, using defaults: {e}")
+            print(f"Warning: Could not parse config, using defaults: {e}")
 
 def load_model():
     global model
     if not os.path.isfile(MODEL_PATH):
-        print(f"❌ Error: Model file missing: {MODEL_PATH}")
+        print(f"ERROR: Model file missing: {MODEL_PATH}")
         return False
     try:
         model = torch.jit.load(MODEL_PATH, map_location=torch.device('cpu'))
         model.eval()
-        print(f"✨ Model Ready: {os.path.basename(MODEL_PATH)}")
+        print(f"Model Ready: {os.path.basename(MODEL_PATH)}")
         return True
     except Exception as e:
-        print(f"❌ Model Load Failure: {e}")
+        print(f"Model Load Failure: {e}")
         return False
 
 @app.route("/health", methods=["GET"])
@@ -138,7 +138,7 @@ def predict():
             diagnosis = prediction
             is_valid = True
 
-        print(f"🔮 Prediction: {prediction} ({conf:.4f}) -> {diagnosis}")
+        print(f"Prediction: {prediction} ({conf:.4f}) -> {diagnosis}")
 
         return jsonify({
             "diagnosis": diagnosis,
@@ -151,7 +151,7 @@ def predict():
             "scores": probs.tolist()
         })
     except Exception as e:
-        print(f"❌ Execution Error: {e}")
+        print(f"Execution Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
