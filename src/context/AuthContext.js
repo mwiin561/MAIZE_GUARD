@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -20,12 +20,25 @@ export const AuthProvider = ({ children }) => {
   // Redirect URI must be added to Google Cloud Console (Credentials → OAuth 2.0 client → Authorized redirect URIs)
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'maizeguard', path: 'redirect' });
 
+  // Client IDs must come from the SAME Google Cloud project (e.g. MAIZE-GUARD / 955909588454-...).
+  // Android: Credentials → "Maize Guard Android" → copy the full Client ID (not the Web client).
+  // iOS: create an iOS OAuth client if you use Sign in with Google on iPhone.
+  const webClientId = '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com';
+  // Full Client ID from: Google Cloud → Credentials → "Maize Guard Android" (must be Android type — do not use Web client here).
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
+
   const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: '802300813012-73a2v8857725natc8uk72vkcs7e7uunh.apps.googleusercontent.com',
-    androidClientId: '802300813012-73a2v8857725natc8uk72vkcs7e7uunh.apps.googleusercontent.com',
-    webClientId: '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com',
+    iosClientId: iosClientId || undefined,
+    androidClientId: androidClientId || undefined,
+    webClientId,
     redirectUri,
   });
+  if (__DEV__ && Platform.OS === 'android' && !androidClientId) {
+    console.warn(
+      'Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in .env (full ID from "Maize Guard Android" OAuth client).'
+    );
+  }
   if (__DEV__) console.log('Google redirect URI (add this in Google Cloud Console):', redirectUri);
 
   useEffect(() => {

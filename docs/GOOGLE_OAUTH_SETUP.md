@@ -24,9 +24,9 @@ So: **do not** add `exp://192.168.110.211:8081` (or any `exp://` / `maizeguard:/
 
 ---
 
-## 2. Native (Expo Go on phone) – create Android and iOS clients
+## 2. Native (Expo Go on phone) – Android and iOS clients
 
-Your **Credentials** page only has a **Web client**. For sign-in from the **phone** you need **Android** and **iOS** OAuth 2.0 clients in the **same** project (MAIZE-GUARD).
+For sign-in from the **phone** you need **Android** and (if you ship iOS) **iOS** OAuth 2.0 clients in the **same** project (MAIZE-GUARD). If you already created one (e.g. **Maize Guard Android**), reuse that client ID — do **not** use the **Web** client ID for `androidClientId`.
 
 ### Create Android client
 
@@ -46,12 +46,13 @@ Your **Credentials** page only has a **Web client**. For sign-in from the **phon
 4. **Bundle ID:** `com.maizeguard.app` (must match `app.json` → `expo.ios.bundleIdentifier`).
 5. Click **Create**. Copy the **Client ID**.
 
-### Use the new IDs in the app
+### Use the IDs in the app
 
-1. Open `src/context/AuthContext.js`.
-2. Set **`iosClientId`** to the **iOS** client ID you copied.
-3. Set **`androidClientId`** to the **Android** client ID you copied.
-4. Keep **`webClientId`** as the existing Web client (955909588454-...).
+1. In the project **root** `.env` file (create it if missing), set:
+   - **`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`** = full **Android** OAuth client ID from Google Cloud (e.g. **Maize Guard Android**), ending in `.apps.googleusercontent.com`.
+   - **`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`** = full **iOS** client ID (only if you use Google Sign-In on iPhone).
+2. Restart Expo after changing `.env` (`npx expo start -c`).
+3. `src/context/AuthContext.js` reads these env vars; **`webClientId`** stays as your **Web application** client (for web / token exchange as configured).
 
 Then **OAuth consent screen** → if the app is in **Testing**, add your Gmail under **Test users**.
 
@@ -67,6 +68,6 @@ Then **OAuth consent screen** → if the app is in **Testing**, add your Gmail u
 
 ## 4. If it still fails
 
-- Confirm the **Android** and **iOS** OAuth clients exist and their IDs match the ones in `src/context/AuthContext.js`.
+- Confirm the **Android** OAuth client exists and **`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`** matches it (not the Web client).
 - Wait a few minutes after saving in Google Cloud, then try again.
 - For "Access blocked", also ensure your email is in **Test users** while the app is in Testing.
