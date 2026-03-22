@@ -32,8 +32,10 @@ cd android
 ## Other settings
 
 1. **`expo-build-properties`** – keeps `buildArchs` in sync with Gradle.
-2. **EAS `production`** – **`app-bundle`** (AAB) on Play Store: Google serves **split APKs** per device (smallest download).
-3. **Preview APK** – sideload; still **arm64-only** with this config.
+2. **EAS profiles** (`eas.json`):
+   - **`production`** and **`preview`** → **`.apk`** — download from Expo and **install on the phone** (sideload / WhatsApp / Telegram). Farmers never use AAB.
+   - **`play-store`** → **`.aab`** — **only** for uploading to **Google Play**; phones cannot install an AAB directly.
+3. All of these stay **arm64-only** with the current Gradle settings.
 
 ## Optional next steps
 
