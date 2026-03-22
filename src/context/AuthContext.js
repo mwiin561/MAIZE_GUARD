@@ -1,9 +1,9 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
 
 import { loginUser, registerUser, getUserProfile, updateUserProfile } from '../api/client';
 
@@ -17,38 +17,63 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
 
-  // Redirect URI must be added to Google Cloud Console (Credentials → OAuth 2.0 client → Authorized redirect URIs)
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'maizeguard', path: 'redirect' });
-
-  // Client IDs must come from the SAME Google Cloud project (e.g. MAIZE-GUARD / 955909588454-...).
-  // Android: Credentials → "Maize Guard Android" → copy the full Client ID (not the Web client).
-  // iOS: create an iOS OAuth client if you use Sign in with Google on iPhone.
+  // Web client = only for OAuth in the browser (https/http redirect URIs in Cloud Console).
+  // Android client = package name + SHA-1; no custom redirect URIs in Console — required for native app OAuth (not Expo Go).
   const webClientId = '955909588454-hbs154hg6r4iqoiog8cdj23a2pd5ra40.apps.googleusercontent.com';
-  // Full Client ID from: Google Cloud → Credentials → "Maize Guard Android" (must be Android type — do not use Web client here).
-  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
+  const androidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+    '955909588454-kemhmvdqqhp2qipok6e53guahu5j0jnl.apps.googleusercontent.com';
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: iosClientId || undefined,
-    androidClientId: androidClientId || undefined,
+    iosClientId: iosClientId || webClientId,
+    androidClientId,
     webClientId,
-    redirectUri,
   });
-  if (__DEV__ && Platform.OS === 'android' && !androidClientId) {
-    console.warn(
-      'Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in .env (full ID from "Maize Guard Android" OAuth client).'
-    );
-  }
-  if (__DEV__) console.log('Google redirect URI (add this in Google Cloud Console):', redirectUri);
 
   useEffect(() => {
+    if (!__DEV__) return;
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      console.warn(
+        '[Google OAuth] Expo Go cannot complete Google Sign-In (exp://). Use a development build. See docs/GOOGLE_OAUTH_SETUP.md'
+      );
+    }
+    if (request?.redirectUri) {
+      console.log(
+        '[Google OAuth] Redirect URI used in the auth request (Android client — do NOT add this to the Web client):',
+        request.redirectUri
+      );
+      console.log(
+        '[Google OAuth] In Google Cloud → Android OAuth client "Maize Guard Android": package com.maizeguard.app + your app signing SHA-1 (EAS: eas credentials / Play Console).'
+      );
+    }
+  }, [request?.redirectUri]);
+
+  useEffect(() => {
+    if (!response) return;
     console.log('Auth response:', response);
+    const err = response?.params?.error;
+    const errDesc = response?.params?.error_description;
+    if (err) {
+      console.warn('Google OAuth error params:', err, errDesc);
+      Alert.alert(
+        'Google Sign In',
+        errDesc || err || 'Authorization failed. Check OAuth consent test users and Web client redirect URIs (see docs/GOOGLE_OAUTH_SETUP.md).'
+      );
+      setIsLoading(false);
+      return;
+    }
     if (response?.type === 'success') {
       const { authentication } = response;
+      if (!authentication?.accessToken) {
+        Alert.alert('Google Sign In', 'No access token returned.');
+        setIsLoading(false);
+        return;
+      }
       handleGoogleSignIn(authentication.accessToken);
     } else if (response?.type === 'error') {
-        Alert.alert('Google Sign In Error', 'Authentication failed.');
-        setIsLoading(false);
+      Alert.alert('Google Sign In Error', 'Authentication failed.');
+      setIsLoading(false);
     }
   }, [response]);
 
