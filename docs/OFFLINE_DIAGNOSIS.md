@@ -23,6 +23,10 @@ If export fails (wrong input size, custom inputs), edit `scripts/export_torchscr
 2. **`DiagnosisScreen`** calls **`ModelService.predict(image)` first**, then tries **upload** for sync/history only. The diagnosis shown to the user is **offline-first**.
 3. **Dark / covered camera** frames are rejected locally (mean brightness check), similar to the Python TFLite service idea.
 
+## Dependencies
+
+- **`react-native-fs`** — required by `@tensorflow/tfjs-react-native` at bundle time (Metro resolves `bundle_resource_io.js`). Without it, **EAS “Bundle JavaScript”** fails. Installed via `npx expo install react-native-fs`.
+
 ## Requirements
 
 | Environment | Offline AI |
