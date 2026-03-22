@@ -75,14 +75,14 @@ const DiagnosisScreen = ({ navigation }) => {
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
+        // skipProcessing:true often breaks on Android (missing width/height or OEM bugs). Prefer processed JPEG.
         const photo = await cameraRef.current.takePictureAsync({
-            quality: 1,
-            skipProcessing: true,
+          quality: 0.92,
+          skipProcessing: false,
         });
-        
-        // --- Square Crop Implementation ---
-        // Get dimensions to calculate the center square
-        const { width, height } = photo;
+
+        const width = photo.width || 1024;
+        const height = photo.height || 1024;
         const size = Math.min(width, height);
         const originX = (width - size) / 2;
         const originY = (height - size) / 2;
@@ -91,7 +91,7 @@ const DiagnosisScreen = ({ navigation }) => {
           photo.uri,
           [
             { crop: { originX, originY, width: size, height: size } },
-            { resize: { width: 1024, height: 1024 } } // High-res square for user preview
+            { resize: { width: 1024, height: 1024 } },
           ],
           { compress: 0.8, format: SaveFormat.JPEG }
         );
@@ -99,7 +99,12 @@ const DiagnosisScreen = ({ navigation }) => {
         setImage(manipResult.uri);
       } catch (e) {
         console.error('Capture error:', e);
-        Alert.alert('Error', 'Failed to take picture');
+        Alert.alert(
+          'Camera error',
+          e?.message
+            ? `${e.message}\n\nTip: try "Upload from Gallery" if the camera keeps failing.`
+            : 'Could not capture the photo. Try again or use Upload from Gallery.'
+        );
       }
     }
   };
@@ -125,43 +130,50 @@ const DiagnosisScreen = ({ navigation }) => {
     let remoteImageUrl = null;
     let serverAiResult = null;
 
-    // 1. Try to upload image and get Server-Side AI result
+    // 1. On-device / offline AI first (no network required)
+    let analysisResult = null;
     try {
-      console.log('Attempting upload and Server-Side AI analysis...');
+      console.log('Running on-device (offline) analysis...');
+      analysisResult = await ModelService.predict(image);
+      if (analysisResult) {
+        console.log('Local analysis result:', analysisResult.source, analysisResult.diagnosis);
+      }
+    } catch (e) {
+      console.log('On-device analysis error:', e?.message || e);
+    }
+
+    // 2. Upload for cloud backup / history URL when online (does not replace offline diagnosis)
+    try {
+      console.log('Uploading scan (optional, for sync)...');
       const uploadResult = await uploadScanImage(image);
-      console.log('Server response:', JSON.stringify(uploadResult));
       remoteImageUrl = uploadResult.imageUrl;
       serverAiResult = uploadResult.aiResult;
       if (serverAiResult) {
-        console.log('Server-Side AI analysis successful:', serverAiResult);
+        console.log('Server AI (reference):', serverAiResult);
       }
     } catch (e) {
-      console.log('Upload/Server AI failed, falling back to local/mock:', e);
+      console.log('Upload skipped (offline or server down):', e?.message || e);
     }
 
-    // Mock AI Analysis (Fallback if all else fails)
+    // 3. If on-device failed completely, use server AI; then mock
     const runMockAnalysis = async () => {
        return new Promise((resolve) => {
          setTimeout(() => {
             const isInfected = Math.random() > 0.4; 
-            const confidence = (Math.random() * (0.99 - 0.85) + 0.85).toFixed(2);
-            resolve({ isInfected, confidence });
-         }, 2000);
+            const confidence = parseFloat((Math.random() * (0.99 - 0.85) + 0.85).toFixed(2));
+            resolve({ isInfected, confidence, diagnosis: isInfected ? 'MSV' : 'Healthy', source: 'mock' });
+         }, 1500);
        });
     };
 
     try {
-      let analysisResult = serverAiResult;
-      
-      // 2. If Server AI failed, try Local Offline Model
-      if (!analysisResult) {
-        console.log('Using local/mock analysis...');
-        analysisResult = await ModelService.predict(image);
+      if (!analysisResult && serverAiResult) {
+        analysisResult = serverAiResult;
       }
-      
-      // 3. Final fallback to Mock
+
       if (!analysisResult) {
-         analysisResult = await runMockAnalysis();
+        console.log('Falling back to mock analysis...');
+        analysisResult = await runMockAnalysis();
       }
 
       const { isInfected, confidence, isInvalid, isMaize, diagnosis: serverDiagnosis } = analysisResult;
@@ -179,18 +191,32 @@ const DiagnosisScreen = ({ navigation }) => {
       }
 
       // Handle Invalid Image / Not a Maize Leaf Case
-      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf' || serverDiagnosis === 'Uncertain Scan') {
+      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf' || serverDiagnosis === 'Uncertain Scan' || serverDiagnosis === 'Invalid Image') {
+        const confNum = Number(confidence);
+        const confPct = Number.isFinite(confNum) ? Math.round(confNum * 100) : 0;
+        const notMaizeStrong =
+          serverDiagnosis === 'Not a Maize Leaf' && confNum >= 0.65;
         const invalidResult = {
           id: Date.now().toString(),
           date: new Date().toISOString(),
           image: image,
           remoteImage: remoteImageUrl,
-          title: serverDiagnosis === 'Uncertain Scan' ? 'Uncertain Scan' : 'Not a Maize Leaf',
+          title:
+            serverDiagnosis === 'Uncertain Scan'
+              ? 'Uncertain Scan'
+              : serverDiagnosis === 'Invalid Image'
+                ? 'Image too dark'
+                : 'Not a Maize Leaf',
           diagnosis: 'Invalid Scan',
           confidence: confidence,
-          description: serverDiagnosis === 'Uncertain Scan' 
-            ? 'The AI is not sure enough to give a result. Please take a clearer photo.'
-            : 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.',
+          description:
+            serverDiagnosis === 'Invalid Image'
+              ? 'The image is too dark or unclear. Please scan in good lighting with the leaf visible.'
+              : serverDiagnosis === 'Uncertain Scan'
+                ? 'The model is not confident enough about this image. Please take a clearer, well-lit photo with the leaf filling the frame.'
+                : notMaizeStrong
+                  ? `The model is about ${confPct}% confident this is not a maize leaf. Try scanning a clear maize leaf in good lighting.`
+                  : `Low confidence (${confPct}%). The model is not sure this is maize — use a clearer photo or rescan.`,
           immediateActions: [
             'Take a new photo in good lighting.',
             'Ensure the leaf fills most of the frame.',
@@ -214,7 +240,7 @@ const DiagnosisScreen = ({ navigation }) => {
         diseaseStage: diseaseStage, // Save the stage
         confidence: confidence,
         description: serverAiResult?.diagnosis === 'Not a Maize Leaf'
-          ? 'The AI model is 100% sure this is not a maize leaf. For a diagnosis, please scan a real maize leaf in good lighting.'
+          ? `The model is about ${Math.round(Number(confidence) * 100) || 0}% confident this is not a maize leaf. Scan a clear maize leaf in good lighting if needed.`
           : (serverAiResult?.diagnosis === 'Healthy Maize' || (!serverAiResult && !isInfected))
             ? 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.'
             : 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.',
@@ -423,7 +449,13 @@ const DiagnosisScreen = ({ navigation }) => {
               <View style={styles.diagnosisRow}>
                 <Text style={styles.diagnosisLabel}>DIAGNOSIS RESULTS</Text>
                 <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{Math.round(result.confidence * 100)}% Confidence</Text>
+                  <Text style={styles.confidenceText}>
+                    {(() => {
+                      const c = Number(result.confidence);
+                      if (!Number.isFinite(c)) return '— Confidence';
+                      return `${Math.round(c * 100)}% Confidence`;
+                    })()}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>

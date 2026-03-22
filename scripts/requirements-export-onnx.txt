@@ -1,0 +1,3 @@
+# For scripts/export_torchscript_to_onnx.py only
+torch
+onnx>=1.16.0

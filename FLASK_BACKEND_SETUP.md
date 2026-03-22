@@ -83,7 +83,7 @@ If you see mock predictions, check:
 
 ### App Config
 - `src/api/client.js` - Backend URLs (line 17-19)
-- `src/services/ModelService.js` - Prediction logic
+- `src/services/ModelService.native.js` (Android/iOS) / `ModelService.web.js` (web) — prediction logic
 
 ## Expected Response Format
 

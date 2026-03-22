@@ -1,26 +1,44 @@
-# Smaller downloads & storage (low-cost Android phones)
+# Smaller downloads & storage (farmer phones)
 
-## Already configured in this repo
+## CPU architectures (current)
 
-1. **`expo-build-properties`** – `buildArchs`: **armeabi-v7a** + **arm64-v8a** only (real devices). Drops **x86 / x86_64** (mostly emulators), which **cuts native `.so` size** a lot in universal APKs.
-2. **`android/gradle.properties`** – `reactNativeArchitectures` matches the above (keeps local/EAS Gradle in sync; run `npx expo prebuild` after changing plugins if you use CNG).
-3. **EAS `production`** – **`app-bundle`** (AAB) for Play Store: Google serves **split APKs** per device so each user downloads **less** than one fat universal APK.
+The app is built for **`arm64-v8a` only** (64-bit ARM).
 
-**Preview / internal APK** (`eas.json` → `preview`) stays **`apk`** for easy sideloading; it is now ARM-only and smaller than before.
+| Who | Supported |
+|-----|-----------|
+| **Typical Android phones from the last ~6–8 years** | Yes (64-bit) |
+| **Very old 32-bit-only phones** (`armeabi-v7a` only) | **No** — install will fail or store may hide the app |
+| **PC emulators** (x86/x86_64) | **No** in this APK — use a Gradle override for dev |
 
-## Optional next steps (product + engineering)
+This **roughly halves** the native library footprint versus shipping **both** `armeabi-v7a` and `arm64-v8a` in one APK.
+
+### Need wider device coverage?
+
+Edit **`android/gradle.properties`** and **`app.json`** → `expo-build-properties` → `buildArchs`:
+
+```text
+armeabi-v7a,arm64-v8a
+```
+
+Then `npx expo prebuild` (if you use CNG) and rebuild.
+
+### Need an emulator build?
+
+```bash
+cd android
+.\gradlew.bat assembleRelease -PreactNativeArchitectures=x86_64
+```
+
+## Other settings
+
+1. **`expo-build-properties`** – keeps `buildArchs` in sync with Gradle.
+2. **EAS `production`** – **`app-bundle`** (AAB) on Play Store: Google serves **split APKs** per device (smallest download).
+3. **Preview APK** – sideload; still **arm64-only** with this config.
+
+## Optional next steps
 
 | Idea | Effect |
 |------|--------|
-| **Server-side inference only** | Removing or not shipping **ONNX** / heavy on-device ML **shrinks the app** the most. |
-| **Smaller assets** | Compress images; avoid huge bundled models in `assets/`. |
-| **Play Store** | Prefer **AAB** + internal testing; avoid one giant universal APK for everyone. |
-| **R8 / minify** | Can reduce size more but needs **release testing** and ProGuard rules. Enable via `expo-build-properties` when ready. |
-
-## Emulator development
-
-If you need **x86_64** emulator builds, temporarily set:
-
-`reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64`
-
-or pass `-PreactNativeArchitectures=x86_64` for a one-off Gradle command.
+| **ONNX INT8 quantization** | Smaller model file; validate accuracy on your dataset |
+| **AAB on Play** | Smallest install for end users |
+| **R8 / minify** | Smaller Java/Kotlin + resources; test release builds |
