@@ -436,9 +436,7 @@ const DiagnosisScreen = ({ navigation }) => {
             <Ionicons name="chevron-back" size={28} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Management Advice</Text>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="share-social-outline" size={24} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.headerButton} />
         </View>
 
         <ScrollView contentContainerStyle={styles.resultScroll}>

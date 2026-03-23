@@ -31,7 +31,6 @@
       "output": "single"
     },
     "plugins": [
-      "expo-web-browser",
       [
         "expo-build-properties",
         {
