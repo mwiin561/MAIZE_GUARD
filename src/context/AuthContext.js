@@ -2,6 +2,14 @@ import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+
+/** Expo Go — Google OAuth always uses an exp:// redirect, which Google rejects (Error 400: invalid_request). */
+function isExpoGo() {
+  return (
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    Constants.appOwnership === 'expo'
+  );
+}
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
@@ -33,9 +41,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!__DEV__) return;
-    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    if (isExpoGo()) {
       console.warn(
-        '[Google OAuth] Expo Go cannot complete Google Sign-In (exp://). Use a development build. See docs/GOOGLE_OAUTH_SETUP.md'
+        '[Google OAuth] You are in Expo Go — Google Sign-In will fail (exp://). Use a dev build: npx expo run:android. Clear Metro cache: npx expo start -c'
       );
     }
     if (request?.redirectUri) {
@@ -58,7 +66,7 @@ export const AuthProvider = ({ children }) => {
       console.warn('Google OAuth error params:', err, errDesc);
       Alert.alert(
         'Google Sign In',
-        errDesc || err || 'Authorization failed. Check OAuth consent test users and Web client redirect URIs (see docs/GOOGLE_OAUTH_SETUP.md).'
+        errDesc || err || 'Authorization failed. If you use Expo Go, Google Sign-In is not supported — use a development build (see docs/GOOGLE_OAUTH_SETUP.md).'
       );
       setIsLoading(false);
       return;
@@ -73,6 +81,9 @@ export const AuthProvider = ({ children }) => {
       handleGoogleSignIn(authentication.accessToken);
     } else if (response?.type === 'error') {
       Alert.alert('Google Sign In Error', 'Authentication failed.');
+      setIsLoading(false);
+    } else if (response?.type === 'dismiss') {
+      // Often after Error 400 in the browser, or user closed the sheet.
       setIsLoading(false);
     }
   }, [response]);
@@ -201,10 +212,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const googleLogin = () => {
+    if (isExpoGo()) {
+      Alert.alert(
+        'Google Sign-In won’t work in Expo Go',
+        'Google returns Error 400 (invalid_request) because Expo Go uses an exp:// redirect, which this OAuth setup cannot use.\n\nUse a development build instead:\n• npx expo run:android\n• or eas build --profile development\n\nThen install that APK and connect to Metro (not the Expo Go app).\n\nIf you already updated code, restart with: npx expo start -c'
+      );
+      return;
+    }
     if (request) {
-        promptAsync();
+      promptAsync();
     } else {
-        Alert.alert('Not Ready', 'Google Sign In is initializing. Please try again in a moment.');
+      Alert.alert('Not Ready', 'Google Sign In is initializing. Please try again in a moment.');
     }
   };
 
