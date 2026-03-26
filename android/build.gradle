@@ -22,3 +22,11 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'com.microsoft.onnxruntime:onnxruntime-android:1.24.3'
+        }
+    }
+}
