@@ -7,6 +7,7 @@
  */
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
+import RemoteLogger from './RemoteLogger';
 
 const INPUT_SIZE = 224;
 /** Reject near-black frames (camera covered) — aligned with Python TFLite service idea */
@@ -60,12 +61,9 @@ class ModelService {
       }
 
       this.isReady = true;
-      console.log('✅ Offline ONNX ready (input:', this._inputName + ')');
+      RemoteLogger.log(`✅ Offline ONNX ready (input: ${this._inputName})`);
     } catch (e) {
-      console.warn(
-        '⚠️ Offline ML unavailable (Expo Go or missing native build):',
-        e?.message || e
-      );
+      RemoteLogger.warn(`⚠️ Offline ML unavailable (Expo Go or missing native build): ${e?.message || e}`);
       this.isReady = false;
     }
   }
@@ -78,7 +76,7 @@ class ModelService {
       try {
         return await this._runOnnxInference(imageUri);
       } catch (e) {
-        console.warn('⚠️ ONNX inference failed:', e?.message);
+        RemoteLogger.warn(`⚠️ ONNX inference failed: ${e?.message}`);
       }
     }
 
@@ -86,9 +84,9 @@ class ModelService {
       try {
         return await this._runFlaskInference(imageUri);
       } catch (e) {
-        console.warn('⚠️ Dev Flask backend skipped:', e?.message);
+        RemoteLogger.warn(`⚠️ Dev Flask backend skipped: ${e?.message}`);
       }
-      console.warn('⚠️ Using random mock diagnosis (__DEV__ only)');
+      RemoteLogger.warn('⚠️ Using random mock diagnosis (__DEV__ only)');
       return this._getDevMockResult();
     }
 
@@ -118,7 +116,10 @@ class ModelService {
       const meanTensor = normalized.mean();
       const meanVal = (await meanTensor.data())[0];
       meanTensor.dispose();
+      RemoteLogger.log(`[ONNX] Mean Brightness: ${meanVal.toFixed(4)} (Threshold: ${MIN_MEAN_BRIGHTNESS})`);
+      
       if (meanVal < MIN_MEAN_BRIGHTNESS) {
+        RemoteLogger.log('[ONNX] REJECTED: Image too dark.');
         return {
           isInvalid: true,
           diagnosis: 'Invalid Image',
@@ -142,13 +143,17 @@ class ModelService {
       const inputTensor = new Tensor('float32', nchwData, [1, 3, INPUT_SIZE, INPUT_SIZE]);
       const feeds = { [this._inputName]: inputTensor };
       const results = await this.onnxSession.run(feeds);
+      RemoteLogger.log('[ONNX] Inference complete.');
 
       const outputKey = Object.keys(results)[0];
       const outputData = Array.from(results[outputKey].data);
+      RemoteLogger.log(`[ONNX] Raw Model Output (${outputKey}): ${JSON.stringify(outputData)}`);
 
       const probs = outputData.some((v) => v < 0 || v > 1.01)
         ? softmax(outputData)
         : outputData;
+      RemoteLogger.log(`[ONNX] Probabilities (Post-Softmax): ${JSON.stringify(probs)}`);
+      
       const topIdx = probs.indexOf(Math.max(...probs));
       const confidence = probs[topIdx];
 
@@ -177,6 +182,7 @@ class ModelService {
         isInvalid: false,
         isHealthy: diagnosis === 'Healthy',
         source: 'offline',
+        scores: probs,
       };
     } finally {
       if (decoded) decoded.dispose();

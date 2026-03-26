@@ -42,6 +42,14 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/scans', require('./routes/scans'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Remote Debug Log Receiver
+app.post('/api/debug/log', (req, res) => {
+  const { message, level, timestamp } = req.body;
+  const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : '📱';
+  console.log(`${prefix} [MOBILE] ${timestamp || ''}: ${message}`);
+  res.sendStatus(200);
+});
+
 // Top-level /predict endpoint for mobile APK inference
 const multer = require('multer');
 const fs = require('fs');

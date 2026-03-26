@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { uploadScanImage, saveScan } from '../api/client';
 import ModelService from '../services/ModelService';
 import { AuthContext } from '../context/AuthContext';
+import RemoteLogger from '../services/RemoteLogger';
 
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
@@ -21,6 +22,7 @@ const DiagnosisScreen = ({ navigation }) => {
   const [location, setLocation] = useState(null);
   const cameraRef = useRef(null);
   const { userInfo } = useContext(AuthContext);
+  const [showDebugModal, setShowDebugModal] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -81,11 +83,17 @@ const DiagnosisScreen = ({ navigation }) => {
           skipProcessing: false,
         });
 
+        RemoteLogger.log('--- PHOTO CAPTURED ---');
+        RemoteLogger.log(`Original URI: ${photo.uri}`);
+        RemoteLogger.log(`Original Resolution: ${photo.width}x${photo.height}`);
+
         const width = photo.width || 1024;
         const height = photo.height || 1024;
         const size = Math.min(width, height);
         const originX = (width - size) / 2;
         const originY = (height - size) / 2;
+
+        RemoteLogger.log(`Cropping Square: ${size}x${size} at (${originX}, ${originY})`);
 
         const manipResult = await manipulateAsync(
           photo.uri,
@@ -96,9 +104,11 @@ const DiagnosisScreen = ({ navigation }) => {
           { compress: 0.8, format: SaveFormat.JPEG }
         );
 
+        RemoteLogger.log(`Final Optimized URI: ${manipResult.uri}`);
+        RemoteLogger.log(`Final Resolution: ${manipResult.width}x${manipResult.height}`);
         setImage(manipResult.uri);
       } catch (e) {
-        console.error('Capture error:', e);
+        RemoteLogger.error(`Capture error: ${e.message}`);
         Alert.alert(
           'Camera error',
           e?.message
@@ -133,13 +143,13 @@ const DiagnosisScreen = ({ navigation }) => {
     // 1. On-device / offline AI first (no network required)
     let analysisResult = null;
     try {
-      console.log('Running on-device (offline) analysis...');
+      RemoteLogger.log('Running on-device (offline) analysis...');
       analysisResult = await ModelService.predict(image);
       if (analysisResult) {
-        console.log('Local analysis result:', analysisResult.source, analysisResult.diagnosis);
+        RemoteLogger.log(`Local analysis result: ${analysisResult.source} ${analysisResult.diagnosis}`);
       }
     } catch (e) {
-      console.log('On-device analysis error:', e?.message || e);
+      RemoteLogger.warn(`On-device analysis error: ${e?.message || e}`);
     }
 
     // 2. Upload for cloud backup / history URL when online (does not replace offline diagnosis)
@@ -168,13 +178,16 @@ const DiagnosisScreen = ({ navigation }) => {
 
     try {
       if (!analysisResult && serverAiResult) {
+        RemoteLogger.log('Using Server AI Result as primary diagnosis.');
         analysisResult = serverAiResult;
       }
 
       if (!analysisResult) {
-        console.log('Falling back to mock analysis...');
+        RemoteLogger.warn('CRITICAL: No AI result from local or server. Falling back to mock analysis...');
         analysisResult = await runMockAnalysis();
       }
+
+      RemoteLogger.log(`--- FINAL DIAGNOSIS DATA --- ${JSON.stringify(analysisResult, null, 2)}`);
 
       const { isInfected, confidence, isInvalid, isMaize, diagnosis: serverDiagnosis } = analysisResult;
       
@@ -464,11 +477,48 @@ const DiagnosisScreen = ({ navigation }) => {
 
           
 
+          {/* Raw Debug Data Button */}
+          <TouchableOpacity 
+            style={{ marginTop: 10, padding: 10, opacity: 0.5 }} 
+            onLongPress={() => setShowDebugModal(true)}
+          >
+            <Text style={{ textAlign: 'center', fontSize: 10, color: '#999' }}>
+              Long-press for Debug Data
+            </Text>
+          </TouchableOpacity>
+
           {/* New Diagnosis Button at bottom */}
           <TouchableOpacity style={[styles.button, styles.secondaryButton, { marginTop: 20 }]} onPress={reset}>
                 <Text style={[styles.buttonText, styles.secondaryText]}>New Diagnosis</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Debug Modal */}
+        {showDebugModal && (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, padding: 20, justifyContent: 'center' }]}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, maxHeight: '80%' }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>AI Diagnostic Data</Text>
+              <ScrollView>
+                <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {JSON.stringify({
+                    id: result.id,
+                    source: result.source || 'unknown',
+                    confidence: result.confidence,
+                    diagnosis: result.diagnosis,
+                    scores: result.scores,
+                    title: result.title
+                  }, null, 2)}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity 
+                style={[styles.button, { marginTop: 20, marginBottom: 0 }]} 
+                onPress={() => setShowDebugModal(false)}
+              >
+                <Text style={styles.buttonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         
 

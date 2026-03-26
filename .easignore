@@ -15,3 +15,7 @@ test_model.html
 # Ignore artifacts
 brain/
 *.md
+
+# Enable CNG for EAS Build
+android/
+ios/
