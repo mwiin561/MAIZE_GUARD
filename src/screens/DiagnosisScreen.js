@@ -453,7 +453,9 @@ const DiagnosisScreen = ({ navigation }) => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
             <Ionicons name="chevron-back" size={28} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Management Advice</Text>
+          <TouchableOpacity onLongPress={() => setShowDebugModal(true)}>
+            <Text style={styles.headerTitle}>Management Advice</Text>
+          </TouchableOpacity>
           <View style={styles.headerButton} />
         </View>
 
@@ -594,6 +596,13 @@ const DiagnosisScreen = ({ navigation }) => {
             </TouchableOpacity>
              <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
                 <Text style={styles.closeText}>Cancel</Text>
+            </TouchableOpacity>
+            {/* Hidden Long-Press on Header or this indicator for Debug Data */}
+            <TouchableOpacity 
+              style={{ position: 'absolute', top: 50, left: 20, zIndex: 100, padding: 10, opacity: 0.2 }}
+              onLongPress={() => setShowDebugModal(true)}
+            >
+              <Text style={{ fontSize: 8, color: '#999' }}>DEBUG DATA</Text>
             </TouchableOpacity>
         </View>
       )}
