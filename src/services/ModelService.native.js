@@ -157,9 +157,7 @@ class ModelService {
       const outputData = Array.from(results[outputKey].data);
       RemoteLogger.log(`[ONNX] Raw Model Output (${outputKey}): ${JSON.stringify(outputData)}`);
 
-      const probs = outputData.some((v) => v < 0 || v > 1.01)
-        ? softmax(outputData)
-        : outputData;
+      const probs = softmax(outputData);
       RemoteLogger.log(`[ONNX] Probabilities (Post-Softmax): ${JSON.stringify(probs)}`);
       
       const topIdx = probs.indexOf(Math.max(...probs));
