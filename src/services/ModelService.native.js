@@ -63,34 +63,42 @@ class ModelService {
       this.isReady = true;
       RemoteLogger.log(`✅ Offline ONNX ready (input: ${this._inputName})`);
     } catch (e) {
-      RemoteLogger.warn(`⚠️ Offline ML unavailable (Expo Go or missing native build): ${e?.message || e}`);
+      const errorMsg = e?.message || e;
+      RemoteLogger.error(`❌ ONNX INIT FAILED: ${errorMsg}`);
+      if (errorMsg.includes('onnxruntime-react-native')) {
+        RemoteLogger.error('💡 TIP: This looks like a native library linking issue. Ensure you are using a development build (APK).');
+      }
       this.isReady = false;
     }
   }
 
   /**
-   * Offline-first: run ONNX on device, then optional dev Flask server, then mock.
+   * Offline-first: run ONNX on device, then optional dev Flask server. No more mocks.
    */
   async predict(imageUri) {
+    RemoteLogger.log(`--- NEW PREDICTION REQUEST (${imageUri}) ---`);
+
     if (this.isReady && this.onnxSession) {
       try {
         return await this._runOnnxInference(imageUri);
       } catch (e) {
-        RemoteLogger.warn(`⚠️ ONNX inference failed: ${e?.message}`);
+        RemoteLogger.error(`❌ ONNX inference failed: ${e?.message}`);
       }
+    } else {
+      RemoteLogger.warn(`⚠️ ONNX session not ready. isReady: ${this.isReady}, session: ${!!this.onnxSession}`);
     }
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      RemoteLogger.log('In DEV mode, attempting Flask backend fallback...');
       try {
         return await this._runFlaskInference(imageUri);
       } catch (e) {
-        RemoteLogger.warn(`⚠️ Dev Flask backend skipped: ${e?.message}`);
+        RemoteLogger.error(`❌ Dev Flask backend failed: ${e?.message}`);
       }
-      RemoteLogger.warn('⚠️ Using random mock diagnosis (__DEV__ only)');
-      return this._getDevMockResult();
     }
 
-    // Production: no ONNX / no dev server — let caller try cloud or show error
+    // Production or both failed: Return null so UI can show the REAL error
+    RemoteLogger.error('CRITICAL: All AI inference paths failed (No ONNX, No Flask).');
     return null;
   }
 
@@ -217,17 +225,6 @@ class ModelService {
     };
   }
 
-  _getDevMockResult() {
-    const isInfected = Math.random() > 0.5;
-    const confidence = Number((Math.random() * (0.95 - 0.72) + 0.72).toFixed(2));
-    return {
-      isInfected,
-      confidence,
-      isInvalid: false,
-      diagnosis: isInfected ? 'MSV' : 'Healthy',
-      source: 'mock',
-    };
-  }
 
   async updateModel() {
     return false;

@@ -166,15 +166,6 @@ const DiagnosisScreen = ({ navigation }) => {
     }
 
     // 3. If on-device failed completely, use server AI; then mock
-    const runMockAnalysis = async () => {
-       return new Promise((resolve) => {
-         setTimeout(() => {
-            const isInfected = Math.random() > 0.4; 
-            const confidence = parseFloat((Math.random() * (0.99 - 0.85) + 0.85).toFixed(2));
-            resolve({ isInfected, confidence, diagnosis: isInfected ? 'MSV' : 'Healthy', source: 'mock' });
-         }, 1500);
-       });
-    };
 
     try {
       if (!analysisResult && serverAiResult) {
@@ -183,8 +174,13 @@ const DiagnosisScreen = ({ navigation }) => {
       }
 
       if (!analysisResult) {
-        RemoteLogger.warn('CRITICAL: No AI result from local or server. Falling back to mock analysis...');
-        analysisResult = await runMockAnalysis();
+        RemoteLogger.error('CRITICAL: AI Model Failure. No result from local ONNX or Remote Server.');
+        setAnalyzing(false);
+        Alert.alert(
+          'AI Diagnosis Failed',
+          'Both the local model and the remote server failed to provide a result.\n\nPlease check your internet connection or ensure the AI service is running on your PC.'
+        );
+        return;
       }
 
       RemoteLogger.log(`--- FINAL DIAGNOSIS DATA --- ${JSON.stringify(analysisResult, null, 2)}`);
