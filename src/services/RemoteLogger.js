@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../api/client';
+import { API_URL } from '../api/client';
 
 class RemoteLogger {
   constructor() {
@@ -14,16 +14,23 @@ class RemoteLogger {
     if (!this.enabled) return;
 
     try {
-      // Background send, don't await/block the UI
-      fetch(`${API_BASE_URL}/debug/log`, {
+      // Create a signal to timeout if the backend is unreachable
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      fetch(`${API_URL}/debug/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: typeof message === 'string' ? message : JSON.stringify(message),
           level,
           timestamp: new Date().toLocaleTimeString(),
         }),
+      }).then(() => {
+        clearTimeout(timeoutId);
       }).catch(() => {
+        clearTimeout(timeoutId);
         // Silently fails if backend is unreachable
       });
     } catch (e) {

@@ -152,25 +152,32 @@ const DiagnosisScreen = ({ navigation }) => {
       RemoteLogger.warn(`On-device analysis error: ${e?.message || e}`);
     }
 
-    // 2. Upload for cloud backup / history URL when online (does not replace offline diagnosis)
-    try {
-      console.log('Uploading scan (optional, for sync)...');
-      const uploadResult = await uploadScanImage(image);
-      remoteImageUrl = uploadResult.imageUrl;
-      serverAiResult = uploadResult.aiResult;
-      if (serverAiResult) {
-        console.log('Server AI (reference):', serverAiResult);
+    // 2. Start UPLOAD in background (don't await it, so diagnosis is fast)
+    const startBackgroundUpload = async () => {
+      try {
+        console.log('Uploading scan in background...');
+        const uploadResult = await uploadScanImage(image);
+        setRemoteImageUrl(uploadResult.imageUrl);
+        return uploadResult.aiResult;
+      } catch (e) {
+        console.log('Background upload skipped:', e?.message || e);
+        return null;
       }
-    } catch (e) {
-      console.log('Upload skipped (offline or server down):', e?.message || e);
-    }
+    };
+    
+    // We start the upload, but we don't wait for it unless we absolutely need it as a fallback
+    const backgroundUploadPromise = startBackgroundUpload();
 
     // 3. If on-device failed completely, use server AI; then mock
 
     try {
-      if (!analysisResult && serverAiResult) {
-        RemoteLogger.log('Using Server AI Result as primary diagnosis.');
-        analysisResult = serverAiResult;
+      if (!analysisResult) {
+        RemoteLogger.log('Waiting for Server AI Result fallback...');
+        serverAiResult = await backgroundUploadPromise;
+        if (serverAiResult) {
+          RemoteLogger.log('Using Server AI Result as primary diagnosis.');
+          analysisResult = serverAiResult;
+        }
       }
 
       if (!analysisResult) {
@@ -207,6 +214,7 @@ const DiagnosisScreen = ({ navigation }) => {
           serverDiagnosis === 'Not a Maize Leaf' && confNum >= 0.65;
         const invalidResult = {
           id: Date.now().toString(),
+          source: analysisResult.source || 'unknown',
           date: new Date().toISOString(),
           image: image,
           remoteImage: remoteImageUrl,
@@ -241,6 +249,7 @@ const DiagnosisScreen = ({ navigation }) => {
 
       const diagnosisResult = {
         id: Date.now().toString(),
+        source: analysisResult.source || 'unknown',
         date: new Date().toISOString(),
         image: image,
         remoteImage: remoteImageUrl,
@@ -507,7 +516,16 @@ const DiagnosisScreen = ({ navigation }) => {
                 </Text>
               </ScrollView>
               <TouchableOpacity 
-                style={[styles.button, { marginTop: 20, marginBottom: 0 }]} 
+                style={[styles.button, { marginTop: 20, marginBottom: 10, backgroundColor: '#4CAF50' }]} 
+                onPress={async () => {
+                   RemoteLogger.log('🔔 CONNECTION TEST: App successfully reached PC!');
+                   Alert.alert('Ping Sent!', 'Check your PC terminal for the "CONNECTION TEST" message.');
+                }}
+              >
+                <Text style={styles.buttonText}>Test PC Connection</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.button, { marginTop: 0, marginBottom: 0 }]} 
                 onPress={() => setShowDebugModal(false)}
               >
                 <Text style={styles.buttonText}>Close</Text>
