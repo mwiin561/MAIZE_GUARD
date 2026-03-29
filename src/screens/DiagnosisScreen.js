@@ -1,17 +1,60 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator, Platform, InteractionManager, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { uploadScanImage, saveScan } from '../api/client';
+import { uploadScanImage, saveScan, API_URL } from '../api/client';
 import ModelService from '../services/ModelService';
 import { AuthContext } from '../context/AuthContext';
 import RemoteLogger from '../services/RemoteLogger';
+
+/** If Unknown softmax is high, the model is confident it is not Healthy/MSV — label clearly, not "Uncertain". */
+const UNKNOWN_HIGH_CONFIDENCE = 0.7;
+/** MSV argmax but weak evidence — tell user to rescan. */
+const MSV_SOFTMAX_WEAK = 0.65;
+const MSV_MARGIN_MIN = 0.15;
+
+/**
+ * @param {number[]|undefined} scores [Healthy, MSV, Unknown]
+ * @param {string} serverDiagnosis
+ */
+function presentationForUncertainPath(scores, serverDiagnosis) {
+  if (serverDiagnosis !== 'Uncertain Scan' || !Array.isArray(scores) || scores.length !== 3) {
+    return null;
+  }
+  const pUnknown = Number(scores[2]);
+  if (!Number.isFinite(pUnknown)) return null;
+  if (pUnknown >= UNKNOWN_HIGH_CONFIDENCE) {
+    return {
+      title: 'Not a Maize Leaf',
+      description:
+        'The model is confident this image does not match a typical maize-leaf scan (wrong crop, strong glare, other species, or unusual lighting). For maize, use a single leaf filling the frame with soft, even light.',
+    };
+  }
+  return {
+    title: 'Uncertain Scan',
+    description:
+      'Healthy, MSV, and Unknown could not be separated clearly for this image. Move closer, fill the frame with one leaf, and avoid harsh sunlight or deep shadow.',
+  };
+}
+
+function msvWeakEvidenceNote(scores) {
+  if (!Array.isArray(scores) || scores.length !== 3) return null;
+  const pH = Number(scores[0]);
+  const pM = Number(scores[1]);
+  const pU = Number(scores[2]);
+  if (![pH, pM, pU].every((x) => Number.isFinite(x))) return null;
+  const second = Math.max(pH, pU);
+  const margin = pM - second;
+  if (pM < MSV_SOFTMAX_WEAK || margin < MSV_MARGIN_MIN) {
+    return `Model evidence for MSV is moderate (${Math.round(pM * 100)}% vs other classes). If the leaf looks healthy, rescan with even lighting and the leaf filling the frame.`;
+  }
+  return null;
+}
 
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
@@ -23,6 +66,9 @@ const DiagnosisScreen = ({ navigation }) => {
   const cameraRef = useRef(null);
   const { userInfo } = useContext(AuthContext);
   const [showDebugModal, setShowDebugModal] = useState(false);
+
+  const { width: winW, height: winH } = Dimensions.get('window');
+  const cameraGuideSize = Math.max(280, Math.min(Math.round(Math.min(winW, winH) * 0.78), 380));
 
   useEffect(() => {
     (async () => {
@@ -121,10 +167,10 @@ const DiagnosisScreen = ({ navigation }) => {
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1, 
+      quality: 1,
     });
 
     if (!result.canceled) {
@@ -136,8 +182,7 @@ const DiagnosisScreen = ({ navigation }) => {
 
   const analyzeImage = async () => {
     setAnalyzing(true);
-    
-    let remoteImageUrl = null;
+
     let serverAiResult = null;
 
     // 1. On-device / offline AI first (no network required)
@@ -152,40 +197,52 @@ const DiagnosisScreen = ({ navigation }) => {
       RemoteLogger.warn(`On-device analysis error: ${e?.message || e}`);
     }
 
-    // 2. Start UPLOAD in background (don't await it, so diagnosis is fast)
+    // 2. Upload in parallel with inference above; we await it after predict so we always get imageUrl for history/Neon
     const startBackgroundUpload = async () => {
       try {
         console.log('Uploading scan in background...');
         const uploadResult = await uploadScanImage(image);
         setRemoteImageUrl(uploadResult.imageUrl);
-        return uploadResult.aiResult;
+        return { imageUrl: uploadResult.imageUrl, aiResult: uploadResult.aiResult };
       } catch (e) {
         console.log('Background upload skipped:', e?.message || e);
-        return null;
+        return { imageUrl: null, aiResult: null };
       }
     };
-    
-    // We start the upload, but we don't wait for it unless we absolutely need it as a fallback
+
     const backgroundUploadPromise = startBackgroundUpload();
 
-    // 3. If on-device failed completely, use server AI; then mock
-
     try {
-      if (!analysisResult) {
-        RemoteLogger.log('Waiting for Server AI Result fallback...');
-        serverAiResult = await backgroundUploadPromise;
-        if (serverAiResult) {
-          RemoteLogger.log('Using Server AI Result as primary diagnosis.');
-          analysisResult = serverAiResult;
-        }
+      let uploadData = { imageUrl: null, aiResult: null };
+      try {
+        uploadData = await backgroundUploadPromise;
+      } catch (e) {
+        RemoteLogger.warn(`Upload failed: ${e?.message || e}`);
       }
+
+      if (!analysisResult && uploadData.aiResult) {
+        RemoteLogger.log('Using Server AI Result as primary diagnosis.');
+        serverAiResult = uploadData.aiResult;
+        analysisResult = uploadData.aiResult;
+      }
+
+      const remoteImageUrl = uploadData.imageUrl;
 
       if (!analysisResult) {
         RemoteLogger.error('CRITICAL: AI Model Failure. No result from local ONNX or Remote Server.');
         setAnalyzing(false);
+        const releaseHelp =
+          'The on-device AI model did not produce a result, and the cloud scan did not return one either.\n\n' +
+          'That can happen with no or unstable internet, or if the server is busy — even when the phone shows a signal.\n\n' +
+          '• Try again on Wi‑Fi or with mobile data.\n' +
+          '• If this keeps happening, the built-in model may not have loaded (check for an ONNX error in logs); try force-closing the app or reinstalling the APK.';
+        const devHelp =
+          'Local ONNX did not return a result, and the upload/dev backend did not return AI either.\n\n' +
+          '• Run the backend on your PC and set EXPO_PUBLIC_BACKEND_HOST to an IP this device can reach.\n' +
+          '• Watch Metro/device logs for "ONNX INIT FAILED" or upload errors.';
         Alert.alert(
           'AI Diagnosis Failed',
-          'Both the local model and the remote server failed to provide a result.\n\nPlease check your internet connection or ensure the AI service is running on your PC.'
+          typeof __DEV__ !== 'undefined' && __DEV__ ? devHelp : releaseHelp
         );
         return;
       }
@@ -193,6 +250,11 @@ const DiagnosisScreen = ({ navigation }) => {
       RemoteLogger.log(`--- FINAL DIAGNOSIS DATA --- ${JSON.stringify(analysisResult, null, 2)}`);
 
       const { isInfected, confidence, isInvalid, isMaize, diagnosis: serverDiagnosis } = analysisResult;
+      const isBackendAiMock =
+        typeof serverDiagnosis === 'string' &&
+        (serverDiagnosis.includes('Mock') ||
+          serverDiagnosis.includes('Unreachable') ||
+          serverDiagnosis.includes('AI Service Unreachable'));
       
       // Calculate MSV Stage if infected
       let diseaseStage = '';
@@ -207,33 +269,54 @@ const DiagnosisScreen = ({ navigation }) => {
       }
 
       // Handle Invalid Image / Not a Maize Leaf Case
-      if (isInvalid || isMaize === false || serverDiagnosis === 'Not a Maize Leaf' || serverDiagnosis === 'Uncertain Scan' || serverDiagnosis === 'Invalid Image') {
+      if (
+        isInvalid ||
+        isMaize === false ||
+        serverDiagnosis === 'Not a Maize Leaf' ||
+        serverDiagnosis === 'Uncertain Scan' ||
+        serverDiagnosis === 'Invalid Image' ||
+        isBackendAiMock
+      ) {
         const confNum = Number(confidence);
         const confPct = Number.isFinite(confNum) ? Math.round(confNum * 100) : 0;
         const notMaizeStrong =
           serverDiagnosis === 'Not a Maize Leaf' && confNum >= 0.65;
+        const uncertainPresent = presentationForUncertainPath(
+          analysisResult.scores,
+          serverDiagnosis
+        );
+        let invalidTitle = 'Not a Maize Leaf';
+        if (isBackendAiMock) {
+          invalidTitle = 'AI service unavailable';
+        } else if (serverDiagnosis === 'Uncertain Scan' && uncertainPresent) {
+          invalidTitle = uncertainPresent.title;
+        } else if (serverDiagnosis === 'Uncertain Scan') {
+          invalidTitle = 'Uncertain Scan';
+        } else if (serverDiagnosis === 'Invalid Image') {
+          invalidTitle = 'Image too dark';
+        }
         const invalidResult = {
           id: Date.now().toString(),
           source: analysisResult.source || 'unknown',
           date: new Date().toISOString(),
           image: image,
           remoteImage: remoteImageUrl,
-          title:
-            serverDiagnosis === 'Uncertain Scan'
-              ? 'Uncertain Scan'
-              : serverDiagnosis === 'Invalid Image'
-                ? 'Image too dark'
-                : 'Not a Maize Leaf',
-          diagnosis: 'Invalid Scan',
+          logits: analysisResult.logits,
+          scores: analysisResult.scores,
+          title: invalidTitle,
+          diagnosis: isBackendAiMock ? 'Service Error' : 'Invalid Scan',
           confidence: confidence,
-          description:
-            serverDiagnosis === 'Invalid Image'
+          description: isBackendAiMock
+            ? 'The cloud AI service could not run this scan (often the Python model worker is not reachable from the backend). On-device ONNX should still work when the model loads; check debug logs. Try again later or use a dev build with a working AI backend.'
+            : serverDiagnosis === 'Invalid Image'
               ? 'The image is too dark or unclear. Please scan in good lighting with the leaf visible.'
-              : serverDiagnosis === 'Uncertain Scan'
-                ? 'The model is not confident enough about this image. Please take a clearer, well-lit photo with the leaf filling the frame.'
-                : notMaizeStrong
-                  ? `The model is about ${confPct}% confident this is not a maize leaf. Try scanning a clear maize leaf in good lighting.`
-                  : `Low confidence (${confPct}%). The model is not sure this is maize — use a clearer photo or rescan.`,
+              : serverDiagnosis === 'Uncertain Scan' && uncertainPresent
+                ? uncertainPresent.description
+                : serverDiagnosis === 'Uncertain Scan'
+                  ? 'The model is not confident enough about this image. Please take a clearer, well-lit photo with the leaf filling the frame.'
+                  : notMaizeStrong
+                    ? `The model is about ${confPct}% confident this is not a maize leaf. Try scanning a clear maize leaf in good lighting.`
+                    : `Low confidence (${confPct}%). The model is not sure this is maize — use a clearer photo or rescan.`,
           immediateActions: [
             'Take a new photo in good lighting.',
             'Ensure the leaf fills most of the frame.',
@@ -243,8 +326,65 @@ const DiagnosisScreen = ({ navigation }) => {
           chemicalControl: 'No action required.'
         };
         setResult(invalidResult);
+
+        let historyItemInvalid = {
+          ...invalidResult,
+          userVerified: true,
+          synced: false,
+          leafhopperObserved: 'Not Sure',
+          location: location
+            ? {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude
+              }
+            : null,
+          userEmail: userInfo && userInfo.email ? userInfo.email : null
+        };
+        if (remoteImageUrl) {
+          try {
+            const scanData = {
+              localId: invalidResult.id,
+              imageMetadata: {
+                resolution: 'Unknown',
+                orientation: 'Portrait'
+              },
+              location: location
+                ? {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude
+                  }
+                : null,
+              environment: {
+                leafhopperObserved: 'Not Sure'
+              },
+              diagnosis: {
+                modelPrediction: invalidResult.diagnosis,
+                confidence: parseFloat(invalidResult.confidence),
+                userVerified: true,
+                finalDiagnosis: invalidResult.diagnosis
+              },
+              imageUrl: remoteImageUrl
+            };
+            await saveScan(scanData);
+            historyItemInvalid.synced = true;
+          } catch (e) {
+            RemoteLogger.warn(`saveScan (invalid path): ${e?.message || e}`);
+          }
+        }
+        await saveToHistory(historyItemInvalid);
         setAnalyzing(false);
-        return; 
+        return;
+      }
+
+      let baseDescription =
+        serverAiResult?.diagnosis === 'Not a Maize Leaf'
+          ? `The model is about ${Math.round(Number(confidence) * 100) || 0}% confident this is not a maize leaf. Scan a clear maize leaf in good lighting if needed.`
+          : serverAiResult?.diagnosis === 'Healthy Maize' || (!serverAiResult && !isInfected)
+            ? 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.'
+            : 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.';
+      const msvWeakNote = serverDiagnosis === 'MSV' ? msvWeakEvidenceNote(analysisResult.scores) : null;
+      if (msvWeakNote) {
+        baseDescription = `${msvWeakNote}\n\n${baseDescription}`;
       }
 
       const diagnosisResult = {
@@ -253,15 +393,13 @@ const DiagnosisScreen = ({ navigation }) => {
         date: new Date().toISOString(),
         image: image,
         remoteImage: remoteImageUrl,
+        logits: analysisResult.logits,
+        scores: analysisResult.scores,
         title: serverDiagnosis ? `${serverDiagnosis} ${diseaseStage ? '(' + diseaseStage + ')' : ''}` : (isInfected ? `MSV Detected (${diseaseStage})` : 'Healthy Maize Plant'),
         diagnosis: serverDiagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
         diseaseStage: diseaseStage, // Save the stage
         confidence: confidence,
-        description: serverAiResult?.diagnosis === 'Not a Maize Leaf'
-          ? `The model is about ${Math.round(Number(confidence) * 100) || 0}% confident this is not a maize leaf. Scan a clear maize leaf in good lighting if needed.`
-          : (serverAiResult?.diagnosis === 'Healthy Maize' || (!serverAiResult && !isInfected))
-            ? 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.'
-            : 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.',
+        description: baseDescription,
         immediateActions: (serverAiResult?.diagnosis === 'Not a Maize Leaf') ? [
           'Take a new photo in good lighting.',
           'Ensure only the leaf is in the frame.',
@@ -356,7 +494,7 @@ const DiagnosisScreen = ({ navigation }) => {
           longitude: location.coords.longitude
         } : null,
         environment: {
-            leafhopperObserved: leafhopperObserved
+            leafhopperObserved: 'Not Sure'
         },
         diagnosis: {
           modelPrediction: result.diagnosis,
@@ -376,7 +514,7 @@ const DiagnosisScreen = ({ navigation }) => {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude
         } : null,
-        leafhopperObserved: leafhopperObserved,
+        leafhopperObserved: 'Not Sure',
         synced: false // Default to false
       };
 
@@ -470,15 +608,42 @@ const DiagnosisScreen = ({ navigation }) => {
                   <Text style={styles.confidenceText}>
                     {(() => {
                       const c = Number(result.confidence);
-                      if (!Number.isFinite(c)) return '— Confidence';
-                      return `${Math.round(c * 100)}% Confidence`;
+                      if (!Number.isFinite(c)) return '—';
+                      const pct = Math.round(c * 100);
+                      if (
+                        Array.isArray(result.scores) &&
+                        result.scores.length === 3
+                      ) {
+                        const labels = ['Healthy', 'MSV', 'Unknown'];
+                        const idx = [0, 1, 2].reduce((best, i) =>
+                          result.scores[i] > result.scores[best] ? i : best
+                        , 0);
+                        return `${pct}% · ${labels[idx]}`;
+                      }
+                      return `${pct}% confidence`;
                     })()}
                   </Text>
                 </View>
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>
               <Text style={styles.description}>{result.description}</Text>
-              
+
+              {Array.isArray(result.logits) &&
+                result.logits.length === 3 &&
+                Array.isArray(result.scores) &&
+                result.scores.length === 3 && (
+                  <View style={styles.inferenceDebugBox}>
+                    <Text style={styles.inferenceDebugTitle}>Model output</Text>
+                    <Text style={styles.inferenceDebugLine} selectable>
+                      Logits [Healthy, MSV, Unknown]:{'\n'}
+                      [{result.logits.map((v) => Number(v).toFixed(4)).join(', ')}]
+                    </Text>
+                    <Text style={styles.inferenceDebugLine} selectable>
+                      Softmax: Healthy {(result.scores[0] * 100).toFixed(2)}% · MSV{' '}
+                      {(result.scores[1] * 100).toFixed(2)}% · Unknown {(result.scores[2] * 100).toFixed(2)}%
+                    </Text>
+                  </View>
+                )}
             </View>
           </View>
 
@@ -504,7 +669,8 @@ const DiagnosisScreen = ({ navigation }) => {
         {showDebugModal && (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, padding: 20, justifyContent: 'center' }]}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, maxHeight: '80%' }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>AI Diagnostic Data</Text>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 5 }}>AI Diagnostic Data</Text>
+              <Text style={{ fontSize: 10, color: '#666', marginBottom: 10 }}>Version: March 27 - 5:55 PM (Take 7)</Text>
               <ScrollView>
                 <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>
                   {JSON.stringify({
@@ -512,7 +678,8 @@ const DiagnosisScreen = ({ navigation }) => {
                     source: result.source || 'unknown',
                     confidence: result.confidence,
                     diagnosis: result.diagnosis,
-                    scores: result.scores,
+                    logits: result.logits,
+                    scores_softmax: result.scores,
                     title: result.title
                   }, null, 2)}
                 </Text>
@@ -520,11 +687,45 @@ const DiagnosisScreen = ({ navigation }) => {
               <TouchableOpacity 
                 style={[styles.button, { marginTop: 20, marginBottom: 10, backgroundColor: '#4CAF50' }]} 
                 onPress={async () => {
-                   RemoteLogger.log('🔔 CONNECTION TEST: App successfully reached PC!');
-                   Alert.alert('Ping Sent!', 'Check your PC terminal for the "CONNECTION TEST" message.');
+                   const testUrl = `${API_URL}/debug/log`;
+                   const isCloud = /onrender\.com|render\.com/i.test(API_URL || '');
+                   RemoteLogger.log(`🔔 CONNECTION TEST: Attempting to reach ${testUrl}`);
+                   try {
+                     const controller = new AbortController();
+                     const timeoutId = setTimeout(() => controller.abort(), 8000);
+                     const resp = await fetch(testUrl, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       signal: controller.signal,
+                       body: JSON.stringify({ message: 'Ping from Debug Modal', level: 'info' })
+                     });
+                     clearTimeout(timeoutId);
+                     const showAlert = (title, msg) =>
+                       InteractionManager.runAfterInteractions(() => Alert.alert(title, msg));
+                     if (resp.ok) {
+                       showAlert(
+                         'Backend reachable',
+                         isCloud
+                           ? `POST succeeded:\n${testUrl}\n\n(Release builds use the cloud API, not your PC.)`
+                           : `POST succeeded:\n${testUrl}\n\nIf you run the backend locally, check that terminal for debug lines.`
+                       );
+                     } else {
+                       showAlert(
+                         'Server responded with an error',
+                         `HTTP ${resp.status}\n${testUrl}`
+                       );
+                     }
+                   } catch (err) {
+                     InteractionManager.runAfterInteractions(() =>
+                       Alert.alert(
+                         'Request failed',
+                         `${err?.message || err}\n\nURL: ${testUrl}\n\n${isCloud ? 'Check phone data/Wi‑Fi and that the Render service is up.' : 'Use the same Wi‑Fi as your PC and confirm EXPO_PUBLIC_BACKEND_HOST in .env matches your PC IP.'}`
+                       )
+                     );
+                   }
                 }}
               >
-                <Text style={styles.buttonText}>Test PC Connection</Text>
+                <Text style={styles.buttonText}>Test backend connection</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.button, { marginTop: 0, marginBottom: 0 }]} 
@@ -547,6 +748,9 @@ const DiagnosisScreen = ({ navigation }) => {
       {image ? (
         <View style={styles.previewContainer}>
           <Image source={{ uri: image }} style={styles.preview} />
+          <Text style={styles.previewHint}>
+            Tip: even lighting and a leaf filling the frame give more reliable results.
+          </Text>
           <View style={styles.actionButtons}>
              {analyzing ? (
                  <ActivityIndicator size="large" color="#4CAF50" />
@@ -566,13 +770,19 @@ const DiagnosisScreen = ({ navigation }) => {
         <View style={{ flex: 1 }}>
             <View style={styles.camera}>
                 <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} facing="back" />
+
+                <View style={styles.captureTipBanner} pointerEvents="none">
+                  <Text style={styles.captureTipText}>
+                    Hold the leaf close, fill the frame, and avoid harsh sunlight on the leaf.
+                  </Text>
+                </View>
                 
-                {/* Square Scanning Overlay */}
-                <View style={styles.overlayContainer}>
+                {/* Square Scanning Overlay — large guide helps framing before square crop */}
+                <View style={styles.overlayContainer} pointerEvents="none">
                   <View style={styles.blurArea} />
-                  <View style={styles.middleRow}>
+                  <View style={[styles.middleRow, { height: cameraGuideSize }]}>
                     <View style={styles.blurArea} />
-                    <View style={styles.focusSquare}>
+                    <View style={[styles.focusSquare, { width: cameraGuideSize, height: cameraGuideSize }]}>
                       <View style={[styles.corner, styles.topLeft]} />
                       <View style={[styles.corner, styles.topRight]} />
                       <View style={[styles.corner, styles.bottomLeft]} />
@@ -581,7 +791,7 @@ const DiagnosisScreen = ({ navigation }) => {
                     <View style={styles.blurArea} />
                   </View>
                   <View style={styles.blurArea}>
-                    <Text style={styles.hintText}>Center the leaf in the square</Text>
+                    <Text style={styles.hintText}>Place one maize leaf in the square — most of the frame</Text>
                   </View>
                 </View>
 
@@ -691,18 +901,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto_400Regular',
     marginBottom: 16,
   },
-  galleryButton: {
-    backgroundColor: '#E8F5E9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  inferenceDebugBox: {
+    marginTop: 4,
+    marginBottom: 8,
     padding: 12,
+    backgroundColor: '#F5F5F5',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
-  galleryButtonText: {
-    color: '#4CAF50',
+  inferenceDebugTitle: {
+    fontSize: 12,
     fontFamily: 'Roboto_700Bold',
-    fontSize: 14,
+    color: '#333',
+    marginBottom: 8,
+  },
+  inferenceDebugLine: {
+    fontSize: 11,
+    fontFamily: 'Roboto_400Regular',
+    color: '#424242',
+    lineHeight: 18,
   },
   sectionHeader: {
     fontSize: 20,
@@ -792,14 +1010,11 @@ const styles = StyleSheet.create({
   },
   middleRow: {
     flexDirection: 'row',
-    height: 250, // Matches focusSquare height
   },
   focusSquare: {
-    width: 250,
-    height: 250,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   corner: {
     position: 'absolute',
@@ -814,12 +1029,32 @@ const styles = StyleSheet.create({
   bottomRight: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0 },
   hintText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Roboto_500Medium',
-    marginTop: 20,
+    marginTop: 12,
+    textAlign: 'center',
+    paddingHorizontal: 16,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+  },
+  captureTipBanner: {
+    position: 'absolute',
+    top: 48,
+    left: 12,
+    right: 12,
+    zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  captureTipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: 'Roboto_400Regular',
+    lineHeight: 18,
+    textAlign: 'center',
   },
   permButton: {
       backgroundColor: '#1a73e8',
@@ -890,7 +1125,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 400,
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 8,
+  },
+  previewHint: {
+    fontSize: 13,
+    color: '#5f6368',
+    fontFamily: 'Roboto_400Regular',
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+    lineHeight: 18,
   },
   actionButtons: {
     width: '100%',

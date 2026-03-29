@@ -1,17 +1,39 @@
-import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TouchableWithoutFeedback, FlatList } from 'react-native';
+import React, { useContext, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TouchableWithoutFeedback, FlatList, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import { uploadScanImage, syncScans } from '../api/client';
+import ModelService from '../services/ModelService';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 const SettingsScreen = ({ navigation }) => {
   const { logout, userInfo } = useContext(AuthContext);
+  const [onnxStatus, setOnnxStatus] = useState(null);
+  const [onnxRefreshing, setOnnxRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewItems, setPreviewItems] = useState([]);
   const [exportStatus, setExportStatus] = useState('');
+
+  const refreshOnnxStatus = useCallback(async () => {
+    try {
+      setOnnxRefreshing(true);
+      await ModelService.init();
+    } catch (e) {
+      // init catches internally; still refresh snapshot
+    } finally {
+      setOnnxStatus(ModelService.getOnnxStatus());
+      setOnnxRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setOnnxStatus(ModelService.getOnnxStatus());
+    }, [])
+  );
 
   const openExportPreview = async () => {
     try {
@@ -83,24 +105,43 @@ const SettingsScreen = ({ navigation }) => {
 
       // Perform the sync
       const response = await syncScans(itemsToSync);
-      
-      // Update local history status for successfully synced items
-      // Note: If some failed on server, they remain synced = false
-      const syncedCount = response && typeof response.syncedCount === 'number'
-        ? response.syncedCount
-        : itemsToSync.length;
 
-      // Mark as synced in the local array
-      // For simplicity, we mark all items in this batch as synced if request succeeded
-      // In a production app, we'd check response.errors for specific failures
-      unsyncedIndices.forEach(idx => {
-        history[idx].synced = true;
-      });
+      const hasInsertList = response && Array.isArray(response.insertedLocalIds);
+      const inserted = hasInsertList ? response.insertedLocalIds.map(String) : [];
+      const skipped =
+        response && Array.isArray(response.skippedDuplicates)
+          ? response.skippedDuplicates.map(String)
+          : [];
+      const syncErrors = response && Array.isArray(response.errors) ? response.errors : [];
+
+      const syncedCount =
+        response && typeof response.syncedCount === 'number'
+          ? response.syncedCount
+          : inserted.length;
+
+      if (hasInsertList) {
+        unsyncedIndices.forEach((idx) => {
+          const idStr = String(history[idx].id);
+          if (inserted.includes(idStr)) {
+            history[idx].synced = true;
+          }
+        });
+      } else {
+        // Older API: treat whole batch as synced on success (less accurate)
+        unsyncedIndices.forEach((idx) => {
+          history[idx].synced = true;
+        });
+      }
 
       await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(history));
-      
-      // Only show the count of records that were actually sent in THIS session
-      const msg = `Successfully exported ${syncedCount} new record${syncedCount === 1 ? '' : 's'} to the database.`;
+
+      let msg = `Exported ${syncedCount} new record${syncedCount === 1 ? '' : 's'} to the database.`;
+      if (skipped.length > 0) {
+        msg += ` ${skipped.length} skipped (already in database — same scan id).`;
+      }
+      if (syncErrors.length > 0) {
+        msg += ` ${syncErrors.length} failed — check login / network.`;
+      }
       setExportStatus(msg);
       
       // Update the preview list to hide the newly synced items
@@ -154,6 +195,51 @@ const SettingsScreen = ({ navigation }) => {
                         <Text style={styles.userEmail}>{userInfo?.email}</Text>
                     </View>
                 </View>
+            </View>
+        </View>
+
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>On-device AI</Text>
+            <View style={styles.card}>
+                <View style={styles.onnxRow}>
+                    <Ionicons name="hardware-chip-outline" size={22} color="#555" style={{ marginRight: 10 }} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.itemTitle}>
+                            {Platform.OS === 'web'
+                              ? 'Model (browser)'
+                              : 'ONNX (offline)'}
+                        </Text>
+                        <Text style={styles.itemSubtitle}>
+                            {onnxStatus == null
+                              ? 'Loading…'
+                              : onnxStatus.platform === 'web'
+                                ? onnxStatus.ready
+                                  ? `Ready${onnxStatus.usesTfjsModel ? ' (TF.js model)' : ''}`
+                                  : 'Not ready'
+                                : onnxStatus.ready
+                                  ? `Ready — input: ${onnxStatus.inputName || 'input'}`
+                                  : onnxStatus.lastInitError
+                                    ? `Not ready: ${onnxStatus.lastInitError}`
+                                    : 'Not ready yet (init may still be running)'}
+                        </Text>
+                    </View>
+                </View>
+                <TouchableOpacity
+                    style={styles.onnxRefreshBtn}
+                    onPress={refreshOnnxStatus}
+                    disabled={onnxRefreshing}
+                >
+                    {onnxRefreshing ? (
+                        <ActivityIndicator size="small" color="#4CAF50" />
+                    ) : (
+                        <Text style={styles.onnxRefreshText}>Refresh status</Text>
+                    )}
+                </TouchableOpacity>
+                {Platform.OS !== 'web' ? (
+                <Text style={styles.onnxHint}>
+                    With USB debugging: adb logcat -s ReactNativeJS:I — search output for Offline ONNX or ONNX INIT
+                </Text>
+                ) : null}
             </View>
         </View>
 
@@ -309,6 +395,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+    fontFamily: 'Roboto_400Regular',
+  },
+  onnxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    paddingBottom: 8,
+  },
+  onnxRefreshBtn: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  onnxRefreshText: {
+    color: '#4CAF50',
+    fontFamily: 'Roboto_500Medium',
+    fontSize: 15,
+  },
+  onnxHint: {
+    fontSize: 11,
+    color: '#aaa',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     fontFamily: 'Roboto_400Regular',
   },
   userRow: {

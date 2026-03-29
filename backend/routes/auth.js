@@ -40,7 +40,7 @@ router.post('/register', async (req, res) => {
     jwt.sign(
       payload,
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: 360000 },
+      { expiresIn: '30d' },
       (err, token) => {
         if (err) {
             console.error('[AUTH] JWT Registration error:', err);
@@ -88,7 +88,7 @@ router.post('/login', async (req, res) => {
     jwt.sign(
       payload,
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: 360000 },
+      { expiresIn: '30d' },
       (err, token) => {
         if (err) throw err;
         res.json({ token });

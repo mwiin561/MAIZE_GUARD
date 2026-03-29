@@ -18,6 +18,14 @@ class ModelService {
     this.tfjsModel = null;
   }
 
+  getOnnxStatus() {
+    return {
+      platform: 'web',
+      ready: this.isReady,
+      usesTfjsModel: !!this.tfjsModel,
+    };
+  }
+
   async init() {
     try {
       this.tfjsModel = await tf.loadLayersModel(MODEL_URL);

@@ -5,7 +5,8 @@
  * Asset: assets/model.onnx.mp4 — ONNX exported from assets/model_torchscript.pt
  * (run: python scripts/export_torchscript_to_onnx.py)
  */
-import * as FileSystem from 'expo-file-system';
+/** Expo SDK 54+: default `expo-file-system` readAsStringAsync throws; legacy API still works. */
+import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 import RemoteLogger from './RemoteLogger';
 
@@ -13,7 +14,7 @@ const INPUT_SIZE = 224;
 /** Reject near-black frames (camera covered) — aligned with Python TFLite service idea */
 const MIN_MEAN_BRIGHTNESS = 0.08;
 
-const LABELS_2 = ['Healthy', 'MSV'];
+/** Model contract: raw logits [Healthy, MSV, Unknown] — indices 0, 1, 2 */
 const LABELS_3 = ['Healthy', 'MSV', 'Unknown'];
 
 function base64ToUint8Array(base64) {
@@ -37,6 +38,23 @@ class ModelService {
     this.modelUri = null;
     this.tfReady = false;
     this._inputName = 'input';
+    /** Set when init() throws — use getOnnxStatus() to inspect from Settings / support. */
+    this._lastInitError = null;
+  }
+
+  /**
+   * Snapshot for Settings / debugging: confirms whether ONNX loaded on this device.
+   */
+  getOnnxStatus() {
+    return {
+      platform: 'native',
+      ready: this.isReady,
+      tfReady: this.tfReady,
+      hasSession: !!this.onnxSession,
+      inputName: this._inputName,
+      modelUriPresent: !!this.modelUri,
+      lastInitError: this._lastInitError,
+    };
   }
 
   async init() {
@@ -61,9 +79,11 @@ class ModelService {
       }
 
       this.isReady = true;
+      this._lastInitError = null;
       RemoteLogger.log(`✅ Offline ONNX ready (input: ${this._inputName})`);
     } catch (e) {
       const errorMsg = e?.message || e;
+      this._lastInitError = typeof errorMsg === 'string' ? errorMsg : String(errorMsg);
       RemoteLogger.error(`❌ ONNX INIT FAILED: ${errorMsg}`);
       if (errorMsg.includes('onnxruntime-react-native')) {
         RemoteLogger.error('💡 TIP: This looks like a native library linking issue. Ensure you are using a development build (APK).');
@@ -107,8 +127,9 @@ class ModelService {
     const { decodeJpeg } = require('@tensorflow/tfjs-react-native');
     const { Tensor } = require('onnxruntime-react-native');
 
+    // Use string literal — FileSystem.EncodingType can be undefined in some release bundles (crashes on .Base64).
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64',
     });
     const rawBytes = base64ToUint8Array(base64);
 
@@ -155,27 +176,24 @@ class ModelService {
 
       const outputKey = Object.keys(results)[0];
       const outputData = Array.from(results[outputKey].data);
-      RemoteLogger.log(`[ONNX] Raw Model Output (${outputKey}): ${JSON.stringify(outputData)}`);
+      RemoteLogger.log(`[ONNX] Raw logits (${outputKey}): ${JSON.stringify(outputData)}`);
 
-      const probs = outputData.some((v) => v < 0 || v > 1.01)
-        ? softmax(outputData)
-        : outputData;
-      RemoteLogger.log(`[ONNX] Probabilities (Post-Softmax): ${JSON.stringify(probs)}`);
-      
+      if (outputData.length !== 3) {
+        const msg = `[ONNX] Expected exactly 3 logits [Healthy, MSV, Unknown], got length ${outputData.length}`;
+        RemoteLogger.error(msg);
+        throw new Error(msg);
+      }
+
+      // Final layer outputs raw logits — always softmax (never treat logits as probabilities).
+      const probs = softmax(outputData);
+      RemoteLogger.log(`[ONNX] Probabilities (softmax): ${JSON.stringify(probs)}`);
+
       const topIdx = probs.indexOf(Math.max(...probs));
       const confidence = probs[topIdx];
 
-      let diagnosis;
-      if (outputData.length === 2) {
-        diagnosis = LABELS_2[topIdx] ?? 'Unknown';
-      } else if (outputData.length >= 3) {
-        diagnosis = LABELS_3[topIdx] ?? 'Unknown';
-      } else {
-        diagnosis = topIdx === 0 ? 'Healthy' : 'MSV';
-      }
+      const diagnosis = LABELS_3[topIdx] ?? 'Unknown';
 
-      const uncertain =
-        diagnosis === 'Unknown' || (outputData.length === 2 && confidence < 0.55);
+      const uncertain = diagnosis === 'Unknown';
 
       // Don't set isMaize: false when we're "uncertain" — that wrongly triggers "Not a Maize Leaf" UI.
       // Only set isMaize when we're sure (undefined = unknown / use Uncertain Scan copy instead).
@@ -190,6 +208,9 @@ class ModelService {
         isInvalid: false,
         isHealthy: diagnosis === 'Healthy',
         source: 'offline',
+        /** Raw logits from final layer [Healthy, MSV, Unknown] */
+        logits: [...outputData],
+        /** Softmax probabilities — same order as logits */
         scores: probs,
       };
     } finally {

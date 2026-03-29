@@ -118,7 +118,10 @@ router.post('/sync', auth, async (req, res) => {
     const scans = req.body;
     if (!Array.isArray(scans)) return res.status(400).json({ msg: 'Data must be an array' });
 
-    const savedScans = [];
+    /** Rows actually inserted (not skipped by ON CONFLICT) */
+    const insertedLocalIds = [];
+    /** local_id already existed — insert skipped */
+    const skippedDuplicates = [];
     const errors = [];
 
     for (const s of scans) {
@@ -146,15 +149,24 @@ router.post('/sync', auth, async (req, res) => {
         ];
 
         const result = await db.query(query, params);
-        // Even if ON CONFLICT happens, we count it as synced for the frontend
-        savedScans.push(s.localId);
+        if (result.rows.length > 0) {
+          insertedLocalIds.push(String(result.rows[0].local_id));
+        } else {
+          skippedDuplicates.push(String(s.localId));
+        }
       } catch (err) {
         console.error(`Sync error for ${s.localId}:`, err.message);
         errors.push({ localId: s.localId, error: err.message });
       }
     }
 
-    res.json({ msg: 'Sync complete', syncedCount: savedScans.length, errors });
+    res.json({
+      msg: 'Sync complete',
+      syncedCount: insertedLocalIds.length,
+      insertedLocalIds,
+      skippedDuplicates,
+      errors,
+    });
   } catch (err) {
     res.status(500).send('Server Error');
   }

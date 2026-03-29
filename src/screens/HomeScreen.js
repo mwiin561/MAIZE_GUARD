@@ -1,5 +1,5 @@
 import React, { useContext, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, Pressable, ImageBackground, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image, ScrollView, Dimensions, Modal, Pressable, ImageBackground, Platform, Alert } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -109,25 +109,42 @@ const HomeScreen = ({ navigation }) => {
 
     if (syncBatch.length > 0) {
         try {
-            // 3. Send Batch to Backend
             const result = await syncScans(syncBatch);
             console.log('Sync successful:', result);
 
-            // 4. Update Local History as Synced
-            updatedHistory = updatedHistory.map(item => {
-                if (itemsToSync.includes(item.id)) {
-                    return { ...item, synced: true };
+            const hasInsertList = result && Array.isArray(result.insertedLocalIds);
+            const inserted = hasInsertList ? result.insertedLocalIds.map(String) : [];
+
+            if (hasInsertList) {
+              updatedHistory = updatedHistory.map((item) => {
+                if (inserted.includes(String(item.id))) {
+                  return { ...item, synced: true };
                 }
                 return item;
-            });
+              });
+            } else {
+              updatedHistory = updatedHistory.map((item) => {
+                if (itemsToSync.includes(item.id)) {
+                  return { ...item, synced: true };
+                }
+                return item;
+              });
+            }
+
+            if (result?.skippedDuplicates?.length) {
+              console.log(
+                'Sync skipped (duplicate local_id):',
+                result.skippedDuplicates.length
+              );
+            }
+            if (result?.errors?.length) {
+              console.log('Sync errors:', result.errors);
+            }
 
             await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
-            setHistory(updatedHistory); // Update state
-            
+            setHistory(updatedHistory);
         } catch (e) {
             console.log('Sync batch failed:', e);
-            // If partial success logic needed, handle here. For now, we retry next time.
-            // However, we did update remoteImage in updatedHistory, so let's save that at least.
             await AsyncStorage.setItem('diagnosisHistory', JSON.stringify(updatedHistory));
         }
     }
@@ -318,6 +335,29 @@ const HomeScreen = ({ navigation }) => {
         <Pressable onPress={() => setProfileMenuVisible(false)}>
             <View style={styles.modalOverlay}>
                 <View style={styles.menuContainer}>
+                    {/* Diagnostic Debug Menu */}
+                    <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: '#f9f9f9' }}>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>AI Diagnostic System</Text>
+                        <Text style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>v3.27.7 (Mar 27 - 5:55 PM)</Text>
+                        <TouchableOpacity 
+                            style={{ backgroundColor: '#4CAF50', padding: 10, borderRadius: 6, alignItems: 'center' }}
+                            onPress={async () => {
+                                try {
+                                    const resp = await fetch(`${API_URL}/debug/log`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ message: 'HomeScreen Connection Test', level: 'info' })
+                                    });
+                                    if (resp.ok) Alert.alert('Success!', 'Reached PC successfully! Check terminal.');
+                                    else Alert.alert('Error', `Server returned ${resp.status}`);
+                                } catch (err) {
+                                    Alert.alert('Connection Failed', `Error: ${err.message}\nPC IP: 192.168.110.211`);
+                                }
+                            }}
+                        >
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Test PC Connection</Text>
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity 
                         style={styles.menuItem} 
                         onPress={() => {
