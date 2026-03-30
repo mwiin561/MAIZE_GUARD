@@ -77,8 +77,8 @@ const SettingsScreen = ({ navigation }) => {
             localId: item.id,
             timestamp: item.date,
             imageMetadata: {
-              resolution: 'Unknown',
-              orientation: 'Portrait'
+              resolution: item.imageMetadata?.resolution || 'Unknown',
+              orientation: item.imageMetadata?.orientation || 'Portrait'
             },
             location: item.location || {},
             environment: {

@@ -32,6 +32,30 @@ function presentationForUncertainPath(scores, serverDiagnosis) {
     return {
       title: 'Not a Maize Leaf',
       description:
+        'Sorry, this image is not identified as a maize leaf.\n\nPlease reupload an image of a maize leaf and try again.\n\nTips:\n- Use a clear, single leaf (fill most of the frame)\n- Use soft, even lighting (avoid glare and deep shadows)\n- Keep the camera angle steady and close\n- Use a simple background so the leaf stands out',
+    };
+  }
+  return {
+    title: 'Uncertain Scan',
+    description:
+      'We could not clearly identify this leaf from the photo.\n\nPlease take a clearer picture and try again.\n\nTips:\n- Fill the frame with one leaf\n- Use even lighting (avoid harsh sun or deep shadows)\n- Keep the leaf in focus and reduce glare',
+  };
+}
+
+/**
+ * Debug/technical copy for the long-press modal.
+ * This intentionally contains the original "model is confident..." explanations.
+ */
+function presentationForUncertainPathDebug(scores, serverDiagnosis) {
+  if (serverDiagnosis !== 'Uncertain Scan' || !Array.isArray(scores) || scores.length !== 3) {
+    return null;
+  }
+  const pUnknown = Number(scores[2]);
+  if (!Number.isFinite(pUnknown)) return null;
+  if (pUnknown >= UNKNOWN_HIGH_CONFIDENCE) {
+    return {
+      title: 'Not a Maize Leaf',
+      description:
         'The model is confident this image does not match a typical maize-leaf scan (wrong crop, strong glare, other species, or unusual lighting). For maize, use a single leaf filling the frame with soft, even light.',
     };
   }
@@ -56,9 +80,20 @@ function msvWeakEvidenceNote(scores) {
   return null;
 }
 
+function imageMetaFromDimensions(width, height) {
+  const w = Number(width);
+  const h = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return { resolution: 'Unknown', orientation: 'Portrait' };
+  }
+  const orientation = h >= w ? 'Portrait' : 'Landscape';
+  return { resolution: `${Math.round(w)}x${Math.round(h)}`, orientation };
+}
+
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [image, setImage] = useState(null);
+  const [imageMeta, setImageMeta] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [remoteImageUrl, setRemoteImageUrl] = useState(null); // URL from backend
@@ -135,6 +170,11 @@ const DiagnosisScreen = ({ navigation }) => {
 
         const width = photo.width || 1024;
         const height = photo.height || 1024;
+        const rawW = photo.width;
+        const rawH = photo.height;
+        setImageMeta(
+          rawW && rawH ? imageMetaFromDimensions(rawW, rawH) : { resolution: 'Unknown', orientation: 'Portrait' }
+        );
         const size = Math.min(width, height);
         const originX = (width - size) / 2;
         const originY = (height - size) / 2;
@@ -175,6 +215,11 @@ const DiagnosisScreen = ({ navigation }) => {
 
     if (!result.canceled) {
       const asset = result.assets[0];
+      setImageMeta(
+        asset?.width && asset?.height
+          ? imageMetaFromDimensions(asset.width, asset.height)
+          : { resolution: 'Unknown', orientation: 'Portrait' }
+      );
       const optimizedUri = await processImage(asset.uri);
       setImage(optimizedUri);
     }
@@ -227,6 +272,7 @@ const DiagnosisScreen = ({ navigation }) => {
       }
 
       const remoteImageUrl = uploadData.imageUrl;
+      const safeImageMeta = imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
 
       if (!analysisResult) {
         RemoteLogger.error('CRITICAL: AI Model Failure. No result from local ONNX or Remote Server.');
@@ -285,6 +331,10 @@ const DiagnosisScreen = ({ navigation }) => {
           analysisResult.scores,
           serverDiagnosis
         );
+        const uncertainPresentDebug = presentationForUncertainPathDebug(
+          analysisResult.scores,
+          serverDiagnosis
+        );
         let invalidTitle = 'Not a Maize Leaf';
         if (isBackendAiMock) {
           invalidTitle = 'AI service unavailable';
@@ -313,10 +363,22 @@ const DiagnosisScreen = ({ navigation }) => {
               : serverDiagnosis === 'Uncertain Scan' && uncertainPresent
                 ? uncertainPresent.description
                 : serverDiagnosis === 'Uncertain Scan'
+                  ? 'Sorry, we could not clearly identify the leaf from this photo. Please reupload an image of a maize leaf and try again.\n\nTips:\n- Fill the frame with one leaf\n- Use soft, even lighting (avoid glare and deep shadows)\n- Keep the leaf close and in focus'
+                  : notMaizeStrong
+                    ? 'Sorry, this image is not identified as a maize leaf.\n\nPlease reupload an image of a maize leaf and try again.\n\nTips:\n- Use a clear, single leaf (fill most of the frame)\n- Use soft, even lighting (avoid glare and deep shadows)\n- Keep the camera angle steady and close\n- Use a simple background so the leaf stands out'
+                    : 'Sorry, we could not confidently identify this as a maize leaf. Please reupload an image of a maize leaf and try again.\n\nTips:\n- Fill the frame with one leaf\n- Use even lighting and avoid glare\n- Keep the leaf in focus',
+          debugDescription: isBackendAiMock
+            ? 'The cloud AI service could not run this scan (often the Python model worker is not reachable from the backend).'
+            : serverDiagnosis === 'Invalid Image'
+              ? 'The image is too dark or unclear.'
+              : serverDiagnosis === 'Uncertain Scan' && uncertainPresentDebug
+                ? uncertainPresentDebug.description
+                : serverDiagnosis === 'Uncertain Scan'
                   ? 'The model is not confident enough about this image. Please take a clearer, well-lit photo with the leaf filling the frame.'
                   : notMaizeStrong
                     ? `The model is about ${confPct}% confident this is not a maize leaf. Try scanning a clear maize leaf in good lighting.`
                     : `Low confidence (${confPct}%). The model is not sure this is maize — use a clearer photo or rescan.`,
+          imageMetadata: safeImageMeta,
           immediateActions: [
             'Take a new photo in good lighting.',
             'Ensure the leaf fills most of the frame.',
@@ -344,10 +406,7 @@ const DiagnosisScreen = ({ navigation }) => {
           try {
             const scanData = {
               localId: invalidResult.id,
-              imageMetadata: {
-                resolution: 'Unknown',
-                orientation: 'Portrait'
-              },
+              imageMetadata: safeImageMeta,
               location: location
                 ? {
                     latitude: location.coords.latitude,
@@ -376,16 +435,24 @@ const DiagnosisScreen = ({ navigation }) => {
         return;
       }
 
-      let baseDescription =
-        serverAiResult?.diagnosis === 'Not a Maize Leaf'
-          ? `The model is about ${Math.round(Number(confidence) * 100) || 0}% confident this is not a maize leaf. Scan a clear maize leaf in good lighting if needed.`
-          : serverAiResult?.diagnosis === 'Healthy Maize' || (!serverAiResult && !isInfected)
-            ? 'Your plant appears healthy and free from Maize Streak Virus. Continue with regular care and monitoring.'
-            : 'A viral disease transmitted by leafhoppers (Cicadulina mbila). Characterized by yellow streaks running parallel to leaf veins, stunted growth, and potential yield loss.';
+      const isMsv = Boolean(diseaseStage);
       const msvWeakNote = serverDiagnosis === 'MSV' ? msvWeakEvidenceNote(analysisResult.scores) : null;
-      if (msvWeakNote) {
-        baseDescription = `${msvWeakNote}\n\n${baseDescription}`;
+
+      // User-facing copy: farmer-friendly (no logits/softmax shown here).
+      let baseDescription = isMsv
+        ? 'MSV detected.\n\nRecommendations:\n- Remove and destroy affected plants to limit spread\n- Control leafhoppers and keep the field weed-free\n- Monitor nearby plants and rescan if you see symptoms'
+        : 'Your plant appears healthy and free from Maize Streak Virus.\n\nCare tips:\n- Keep weeds under control\n- Monitor regularly for early signs of disease\n- Maintain good crop hygiene and proper watering';
+
+      if (isMsv && msvWeakNote) {
+        // Keep this generic (no percentages) and avoid stage mention.
+        baseDescription += '\n\nIf the leaf looks healthy, please rescan with a clearer photo (even lighting, one leaf filling the frame).';
       }
+
+      // Technical/debug copy for the long-press modal.
+      // Do not use this in the main UI.
+      const debugDescription = isMsv
+        ? (msvWeakNote || 'Model evidence indicates MSV. See softmax/logits in “More Details”.')
+        : 'Model evidence indicates Healthy. See softmax/logits in “More Details”.';
 
       const diagnosisResult = {
         id: Date.now().toString(),
@@ -395,16 +462,19 @@ const DiagnosisScreen = ({ navigation }) => {
         remoteImage: remoteImageUrl,
         logits: analysisResult.logits,
         scores: analysisResult.scores,
-        title: serverDiagnosis ? `${serverDiagnosis} ${diseaseStage ? '(' + diseaseStage + ')' : ''}` : (isInfected ? `MSV Detected (${diseaseStage})` : 'Healthy Maize Plant'),
+        // Do not show MSV stage in the main UI; keep it for long-press details only.
+        title: isMsv ? 'MSV Detected' : 'Healthy Maize Plant',
         diagnosis: serverDiagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
         diseaseStage: diseaseStage, // Save the stage
         confidence: confidence,
         description: baseDescription,
+        debugDescription,
+        imageMetadata: safeImageMeta,
         immediateActions: (serverAiResult?.diagnosis === 'Not a Maize Leaf') ? [
           'Take a new photo in good lighting.',
           'Ensure only the leaf is in the frame.',
           'Avoid blurry or dark images.'
-        ] : isInfected ? [
+        ] : isMsv ? [
           'Remove and destroy infected plants immediately to prevent spread.',
           'Control leafhopper populations using recommended insecticides.',
           'Clear grass weeds around the field which may host the virus.'
@@ -413,7 +483,7 @@ const DiagnosisScreen = ({ navigation }) => {
           'Monitor for presence of leafhoppers.',
           'Keep field weed-free.'
         ],
-        longTermPrevention: isInfected ? [
+        longTermPrevention: isMsv ? [
           'Plant MSV-resistant maize varieties.',
           'Plant early to avoid peak leafhopper populations.',
           'Practice crop rotation.'
@@ -421,7 +491,7 @@ const DiagnosisScreen = ({ navigation }) => {
           'Use certified disease-free seeds.',
           'Maintain field hygiene.'
         ],
-        chemicalControl: isInfected 
+        chemicalControl: isMsv 
           ? 'Use seed dressings (e.g., Imidacloprid) before planting to protect seedlings. Foliar sprays may be needed if vector population is high.'
           : 'No chemical control needed at this time.'
       };
@@ -442,10 +512,7 @@ const DiagnosisScreen = ({ navigation }) => {
         try {
           const scanData = {
             localId: diagnosisResult.id,
-            imageMetadata: {
-              resolution: 'Unknown', 
-              orientation: 'Portrait'
-            },
+            imageMetadata: safeImageMeta,
             location: location ? {
               latitude: location.coords.latitude,
               longitude: location.coords.longitude
@@ -480,15 +547,16 @@ const DiagnosisScreen = ({ navigation }) => {
     try {
       if (!result) return;
 
+      const safeImageMeta =
+        result.imageMetadata ||
+        imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
+
       const finalDiagnosis = isCorrect ? result.diagnosis : correctedLabel;
       
       // Create full scan record for backend
       const scanData = {
         localId: result.id,
-        imageMetadata: {
-          resolution: 'Unknown', 
-          orientation: 'Portrait'
-        },
+        imageMetadata: safeImageMeta,
         location: location ? {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude
@@ -581,6 +649,7 @@ const DiagnosisScreen = ({ navigation }) => {
   const reset = () => {
     setImage(null);
     setResult(null);
+    setImageMeta(null);
   };
 
   if (result) {
@@ -604,46 +673,9 @@ const DiagnosisScreen = ({ navigation }) => {
             <View style={styles.mainCardContent}>
               <View style={styles.diagnosisRow}>
                 <Text style={styles.diagnosisLabel}>DIAGNOSIS RESULTS</Text>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>
-                    {(() => {
-                      const c = Number(result.confidence);
-                      if (!Number.isFinite(c)) return '—';
-                      const pct = Math.round(c * 100);
-                      if (
-                        Array.isArray(result.scores) &&
-                        result.scores.length === 3
-                      ) {
-                        const labels = ['Healthy', 'MSV', 'Unknown'];
-                        const idx = [0, 1, 2].reduce((best, i) =>
-                          result.scores[i] > result.scores[best] ? i : best
-                        , 0);
-                        return `${pct}% · ${labels[idx]}`;
-                      }
-                      return `${pct}% confidence`;
-                    })()}
-                  </Text>
-                </View>
               </View>
               <Text style={styles.diseaseTitle}>{result.title}</Text>
               <Text style={styles.description}>{result.description}</Text>
-
-              {Array.isArray(result.logits) &&
-                result.logits.length === 3 &&
-                Array.isArray(result.scores) &&
-                result.scores.length === 3 && (
-                  <View style={styles.inferenceDebugBox}>
-                    <Text style={styles.inferenceDebugTitle}>Model output</Text>
-                    <Text style={styles.inferenceDebugLine} selectable>
-                      Logits [Healthy, MSV, Unknown]:{'\n'}
-                      [{result.logits.map((v) => Number(v).toFixed(4)).join(', ')}]
-                    </Text>
-                    <Text style={styles.inferenceDebugLine} selectable>
-                      Softmax: Healthy {(result.scores[0] * 100).toFixed(2)}% · MSV{' '}
-                      {(result.scores[1] * 100).toFixed(2)}% · Unknown {(result.scores[2] * 100).toFixed(2)}%
-                    </Text>
-                  </View>
-                )}
             </View>
           </View>
 
@@ -655,7 +687,7 @@ const DiagnosisScreen = ({ navigation }) => {
             onLongPress={() => setShowDebugModal(true)}
           >
             <Text style={{ textAlign: 'center', fontSize: 10, color: '#999' }}>
-              Long-press for Debug Data
+              Long-press for More Details
             </Text>
           </TouchableOpacity>
 
@@ -669,20 +701,55 @@ const DiagnosisScreen = ({ navigation }) => {
         {showDebugModal && (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, padding: 20, justifyContent: 'center' }]}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, maxHeight: '80%' }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 5 }}>AI Diagnostic Data</Text>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 5 }}>More Details</Text>
               <Text style={{ fontSize: 10, color: '#666', marginBottom: 10 }}>Version: March 27 - 5:55 PM (Take 7)</Text>
               <ScrollView>
-                <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                  {JSON.stringify({
-                    id: result.id,
-                    source: result.source || 'unknown',
-                    confidence: result.confidence,
-                    diagnosis: result.diagnosis,
-                    logits: result.logits,
-                    scores_softmax: result.scores,
-                    title: result.title
-                  }, null, 2)}
-                </Text>
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }}>{result.title}</Text>
+                  <Text style={{ fontSize: 12, marginBottom: 10 }}>
+                    {result.debugDescription || result.description}
+                  </Text>
+
+                  {Array.isArray(result.logits) &&
+                    result.logits.length === 3 &&
+                    Array.isArray(result.scores) &&
+                    result.scores.length === 3 && (
+                      <View style={{ marginBottom: 10 }}>
+                        <Text style={{ fontWeight: '600', marginBottom: 4 }}>Model output (debug)</Text>
+                        <Text style={{ fontFamily: 'monospace', fontSize: 12 }} selectable>
+                          Logits [Healthy, MSV, Unknown]:{'\n'}
+                          [{result.logits.map((v) => Number(v).toFixed(4)).join(', ')}]
+                        </Text>
+                        <Text style={{ fontFamily: 'monospace', fontSize: 12 }} selectable>
+                          Softmax: Healthy {(result.scores[0] * 100).toFixed(2)}% · MSV {(result.scores[1] * 100).toFixed(2)}% · Unknown {(result.scores[2] * 100).toFixed(2)}%
+                        </Text>
+                      </View>
+                    )}
+
+                  {!!result.diseaseStage && (
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={{ fontWeight: '600', marginBottom: 4 }}>MSV stage logic (debug)</Text>
+                      <Text style={{ fontSize: 12 }}>
+                        If confidence &gt; 0.64 => Late Stage, if confidence &lt; 0.46 => Early Stage, otherwise => Intermediate Stage.
+                      </Text>
+                      <Text style={{ fontSize: 12, marginTop: 4 }}>Computed stage: {result.diseaseStage}</Text>
+                    </View>
+                  )}
+
+                  <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                    {JSON.stringify({
+                      id: result.id,
+                      source: result.source || 'unknown',
+                      confidence: result.confidence,
+                      diagnosis: result.diagnosis,
+                      logits: result.logits,
+                      scores_softmax: result.scores,
+                      diseaseStage: result.diseaseStage,
+                      title: result.title,
+                      debugDescription: result.debugDescription || result.description
+                    }, null, 2)}
+                  </Text>
+                </View>
               </ScrollView>
               <TouchableOpacity 
                 style={[styles.button, { marginTop: 20, marginBottom: 10, backgroundColor: '#4CAF50' }]} 
@@ -807,12 +874,12 @@ const DiagnosisScreen = ({ navigation }) => {
              <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
                 <Text style={styles.closeText}>Cancel</Text>
             </TouchableOpacity>
-            {/* Hidden Long-Press on Header or this indicator for Debug Data */}
+            {/* Hidden Long-Press on Header or this indicator for More Details */}
             <TouchableOpacity 
               style={{ position: 'absolute', top: 50, left: 20, zIndex: 100, padding: 10, opacity: 0.2 }}
               onLongPress={() => setShowDebugModal(true)}
             >
-              <Text style={{ fontSize: 8, color: '#999' }}>DEBUG DATA</Text>
+              <Text style={{ fontSize: 8, color: '#999' }}>MORE DETAILS</Text>
             </TouchableOpacity>
         </View>
       )}

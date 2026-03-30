@@ -86,17 +86,19 @@ router.post('/', auth, async (req, res) => {
     const query = `
       INSERT INTO scans (
         user_id, local_id, latitude, longitude, accuracy, 
+        resolution, orientation,
         model_prediction, confidence, growth_stage, plant_age,
         severity, user_verified, final_diagnosis,
         weather, weed_presence, leafhopper_observed,
         retries, time_spent_seconds, result_accepted,
         image_url, synced_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
       RETURNING *
     `;
     
     const params = [
       req.user.id, s.localId, s.location?.latitude, s.location?.longitude, s.location?.accuracy,
+      s.imageMetadata?.resolution, s.imageMetadata?.orientation,
       s.diagnosis?.modelPrediction, s.diagnosis?.confidence, s.growthStage, s.plantAge,
       s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
       s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
@@ -129,18 +131,20 @@ router.post('/sync', auth, async (req, res) => {
         const query = `
           INSERT INTO scans (
             user_id, local_id, latitude, longitude, accuracy, 
+            resolution, orientation,
             model_prediction, confidence, growth_stage, plant_age,
             severity, user_verified, final_diagnosis,
             weather, weed_presence, leafhopper_observed,
             retries, time_spent_seconds, result_accepted,
             image_url, synced_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
           ON CONFLICT (local_id) DO NOTHING
           RETURNING local_id
         `;
         
         const params = [
           req.user.id, s.localId, s.location?.latitude, s.location?.longitude, s.location?.accuracy,
+          s.imageMetadata?.resolution, s.imageMetadata?.orientation,
           s.diagnosis?.modelPrediction, s.diagnosis?.confidence, s.growthStage, s.plantAge,
           s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
           s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,

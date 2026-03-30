@@ -83,8 +83,8 @@ const HomeScreen = ({ navigation }) => {
             const scanData = {
                 localId: item.id,
                 imageMetadata: {
-                  resolution: 'Unknown', 
-                  orientation: 'Portrait'
+                  resolution: item.imageMetadata?.resolution || 'Unknown',
+                  orientation: item.imageMetadata?.orientation || 'Portrait',
                 },
                 location: item.location,
                 environment: {
