@@ -97,6 +97,16 @@ const HomeScreen = ({ navigation }) => {
                   userVerified: true,
                   finalDiagnosis: item.diagnosis
                 },
+                appUsage: {
+                  retries: Number(item.retries) || 0,
+                  timeSpentSeconds: Number(item.timeSpentSeconds) || null,
+                  resultAccepted:
+                    typeof item.resultAccepted === 'boolean' ? item.resultAccepted : true,
+                },
+                deviceInfo: {
+                  deviceModel: item.deviceModel || 'Unknown',
+                  osVersion: item.osVersion || 'Unknown',
+                },
                 imageUrl: remoteUrl
             };
             

@@ -91,8 +91,9 @@ router.post('/', auth, async (req, res) => {
         severity, user_verified, final_diagnosis,
         weather, weed_presence, leafhopper_observed,
         retries, time_spent_seconds, result_accepted,
+        device_model, os_version,
         image_url, synced_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
       RETURNING *
     `;
     
@@ -103,6 +104,7 @@ router.post('/', auth, async (req, res) => {
       s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
       s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
       s.appUsage?.retries, s.appUsage?.timeSpentSeconds, s.appUsage?.resultAccepted,
+      s.deviceInfo?.deviceModel, s.deviceInfo?.osVersion,
       s.imageUrl
     ];
 
@@ -136,8 +138,9 @@ router.post('/sync', auth, async (req, res) => {
             severity, user_verified, final_diagnosis,
             weather, weed_presence, leafhopper_observed,
             retries, time_spent_seconds, result_accepted,
+            device_model, os_version,
             image_url, synced_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
           ON CONFLICT (local_id) DO NOTHING
           RETURNING local_id
         `;
@@ -149,6 +152,7 @@ router.post('/sync', auth, async (req, res) => {
           s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
           s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
           s.appUsage?.retries, s.appUsage?.timeSpentSeconds, s.appUsage?.resultAccepted,
+          s.deviceInfo?.deviceModel, s.deviceInfo?.osVersion,
           s.imageUrl
         ];
 

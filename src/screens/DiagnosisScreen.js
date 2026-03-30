@@ -17,6 +17,13 @@ const UNKNOWN_HIGH_CONFIDENCE = 0.7;
 /** MSV argmax but weak evidence — tell user to rescan. */
 const MSV_SOFTMAX_WEAK = 0.65;
 const MSV_MARGIN_MIN = 0.15;
+const RETRY_WINDOW_MS = 5 * 60 * 1000;
+const RETRY_DIAGNOSES = new Set([
+  'Invalid Image',
+  'Not a Maize Leaf',
+  'Uncertain Scan',
+  'Service Error',
+]);
 
 /**
  * @param {number[]|undefined} scores [Healthy, MSV, Unknown]
@@ -88,6 +95,45 @@ function imageMetaFromDimensions(width, height) {
   }
   const orientation = h >= w ? 'Portrait' : 'Landscape';
   return { resolution: `${Math.round(w)}x${Math.round(h)}`, orientation };
+}
+
+function getDeviceInfo() {
+  const constants = Platform.constants || {};
+  const model =
+    constants.Model ||
+    constants.model ||
+    constants.Device ||
+    constants.deviceName ||
+    'Unknown';
+  const osVersion =
+    Platform.Version != null
+      ? `${Platform.OS} ${Platform.Version}`
+      : Platform.OS || 'Unknown';
+  return {
+    deviceModel: String(model),
+    osVersion: String(osVersion),
+  };
+}
+
+async function computeRetryCountFromHistory() {
+  try {
+    const raw = await AsyncStorage.getItem('diagnosisHistory');
+    if (!raw) return 0;
+    const history = JSON.parse(raw);
+    if (!Array.isArray(history) || history.length === 0) return 0;
+    const now = Date.now();
+    const recent = history.find((item) => {
+      const t = Date.parse(item?.date || '');
+      return Number.isFinite(t) && now - t <= RETRY_WINDOW_MS;
+    });
+    if (!recent) return 0;
+    if (RETRY_DIAGNOSES.has(String(recent.diagnosis || ''))) {
+      return (Number(recent.retries) || 0) + 1;
+    }
+    return 0;
+  } catch (e) {
+    return 0;
+  }
 }
 
 function severityFromDiagnosis(label, fallbackStage = 'Unknown') {
@@ -235,6 +281,7 @@ const DiagnosisScreen = ({ navigation }) => {
 
   const analyzeImage = async () => {
     setAnalyzing(true);
+    const startedAtMs = Date.now();
 
     let serverAiResult = null;
 
@@ -281,6 +328,9 @@ const DiagnosisScreen = ({ navigation }) => {
 
       const remoteImageUrl = uploadData.imageUrl;
       const safeImageMeta = imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
+      const retries = await computeRetryCountFromHistory();
+      const timeSpentSeconds = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
+      const deviceInfo = getDeviceInfo();
 
       if (!analysisResult) {
         RemoteLogger.error('CRITICAL: AI Model Failure. No result from local ONNX or Remote Server.');
@@ -364,6 +414,11 @@ const DiagnosisScreen = ({ navigation }) => {
           title: invalidTitle,
           diagnosis: isBackendAiMock ? 'Service Error' : 'Not a Maize Leaf',
           severity: isBackendAiMock ? 'Unknown' : 'Not a Maize Leaf',
+          retries,
+          timeSpentSeconds,
+          resultAccepted: true,
+          deviceModel: deviceInfo.deviceModel,
+          osVersion: deviceInfo.osVersion,
           confidence: confidence,
           description: isBackendAiMock
             ? 'The cloud AI service could not run this scan (often the Python model worker is not reachable from the backend). On-device ONNX should still work when the model loads; check debug logs. Try again later or use a dev build with a working AI backend.'
@@ -432,6 +487,15 @@ const DiagnosisScreen = ({ navigation }) => {
                 userVerified: true,
                 finalDiagnosis: invalidResult.diagnosis
               },
+              appUsage: {
+                retries,
+                timeSpentSeconds,
+                resultAccepted: true
+              },
+              deviceInfo: {
+                deviceModel: deviceInfo.deviceModel,
+                osVersion: deviceInfo.osVersion
+              },
               imageUrl: remoteImageUrl
             };
             await saveScan(scanData);
@@ -477,6 +541,11 @@ const DiagnosisScreen = ({ navigation }) => {
         diagnosis: serverDiagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
         diseaseStage: diseaseStage, // Save the stage
         severity: isMsv ? diseaseStage : 'Healthy',
+        retries,
+        timeSpentSeconds,
+        resultAccepted: true,
+        deviceModel: deviceInfo.deviceModel,
+        osVersion: deviceInfo.osVersion,
         confidence: confidence,
         description: baseDescription,
         debugDescription,
@@ -538,6 +607,15 @@ const DiagnosisScreen = ({ navigation }) => {
               userVerified: true,
               finalDiagnosis: diagnosisResult.diagnosis
             },
+            appUsage: {
+              retries: diagnosisResult.retries,
+              timeSpentSeconds: diagnosisResult.timeSpentSeconds,
+              resultAccepted: diagnosisResult.resultAccepted
+            },
+            deviceInfo: {
+              deviceModel: diagnosisResult.deviceModel,
+              osVersion: diagnosisResult.osVersion
+            },
             imageUrl: remoteImageUrl
           };
           await saveScan(scanData);
@@ -564,6 +642,7 @@ const DiagnosisScreen = ({ navigation }) => {
         imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
 
       const finalDiagnosis = isCorrect ? result.diagnosis : correctedLabel;
+      const resultAccepted = Boolean(isCorrect);
       const finalSeverity = isCorrect
         ? (result.severity || severityFromDiagnosis(result.diagnosis, result.diseaseStage))
         : severityFromDiagnosis(finalDiagnosis, result.diseaseStage);
@@ -586,6 +665,15 @@ const DiagnosisScreen = ({ navigation }) => {
           userVerified: true,
           finalDiagnosis: finalDiagnosis
         },
+        appUsage: {
+          retries: Number(result.retries) || 0,
+          timeSpentSeconds: Number(result.timeSpentSeconds) || null,
+          resultAccepted
+        },
+        deviceInfo: {
+          deviceModel: result.deviceModel || 'Unknown',
+          osVersion: result.osVersion || 'Unknown'
+        },
         imageUrl: remoteImageUrl // might be null if offline
       };
 
@@ -594,6 +682,7 @@ const DiagnosisScreen = ({ navigation }) => {
         ...result,
         diagnosis: finalDiagnosis,
         severity: finalSeverity,
+        resultAccepted,
         userVerified: true,
         location: location ? {
             latitude: location.coords.latitude,
