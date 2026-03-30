@@ -148,6 +148,7 @@ const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [image, setImage] = useState(null);
   const [imageMeta, setImageMeta] = useState(null);
+  const [retakeCount, setRetakeCount] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [remoteImageUrl, setRemoteImageUrl] = useState(null); // URL from backend
@@ -328,7 +329,8 @@ const DiagnosisScreen = ({ navigation }) => {
 
       const remoteImageUrl = uploadData.imageUrl;
       const safeImageMeta = imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
-      const retries = await computeRetryCountFromHistory();
+      const heuristicRetries = await computeRetryCountFromHistory();
+      const retries = retakeCount > 0 ? retakeCount : heuristicRetries;
       const timeSpentSeconds = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
       const deviceInfo = getDeviceInfo();
 
@@ -756,6 +758,7 @@ const DiagnosisScreen = ({ navigation }) => {
     setImage(null);
     setResult(null);
     setImageMeta(null);
+    setRetakeCount(0);
   };
 
   if (result) {
@@ -932,7 +935,13 @@ const DiagnosisScreen = ({ navigation }) => {
                     <TouchableOpacity style={styles.button} onPress={analyzeImage}>
                         <Text style={styles.buttonText}>Analyze Leaf</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => setImage(null)}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.secondaryButton]}
+                      onPress={() => {
+                        setRetakeCount((v) => v + 1);
+                        setImage(null);
+                      }}
+                    >
                         <Text style={[styles.buttonText, styles.secondaryText]}>Retake</Text>
                     </TouchableOpacity>
                  </>
