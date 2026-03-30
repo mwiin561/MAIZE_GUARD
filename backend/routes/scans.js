@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { pool } = db;
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
@@ -51,6 +52,142 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
+/** Optional model pipeline id (e.g. offline / flask-backend); optional logits & scores arrays for JSONB. */
+function predictionExtrasFromBody(s) {
+  const d = s.diagnosis || {};
+  const source = d.predictionSource ?? s.predictionSource ?? null;
+  const logits = Array.isArray(d.logits) ? d.logits : null;
+  const scores = Array.isArray(d.scores) ? d.scores : null;
+  return { source, logitsJson: logits == null ? null : JSON.stringify(logits), scoresJson: scores == null ? null : JSON.stringify(scores) };
+}
+
+/**
+ * Inserts into scans, then predictions, diagnoses, sync_log in one transaction.
+ * @param {number} userId
+ * @param {object} s - same shape as POST /api/scans body
+ * @param {'received'|'synced'} syncLogStatus
+ * @param {object} [opts]
+ * @param {string} [opts.conflict] - if 'nothing', uses ON CONFLICT (local_id) DO NOTHING and skips related rows when duplicate
+ * @returns {Promise<{ scanRow: object|null, skippedDuplicate: boolean }>}
+ */
+async function insertScanWithRelatedTables(userId, s, syncLogStatus, opts = {}) {
+  const conflict = opts.conflict;
+  const scanSql =
+    conflict === 'nothing'
+      ? `
+      INSERT INTO scans (
+        user_id, local_id, latitude, longitude, accuracy,
+        resolution, orientation,
+        model_prediction, confidence, growth_stage, plant_age,
+        severity, user_verified, final_diagnosis,
+        weather, weed_presence, leafhopper_observed,
+        retries, time_spent_seconds, result_accepted,
+        device_model, os_version,
+        image_url, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
+      ON CONFLICT (local_id) DO NOTHING
+      RETURNING *
+    `
+      : `
+      INSERT INTO scans (
+        user_id, local_id, latitude, longitude, accuracy,
+        resolution, orientation,
+        model_prediction, confidence, growth_stage, plant_age,
+        severity, user_verified, final_diagnosis,
+        weather, weed_presence, leafhopper_observed,
+        retries, time_spent_seconds, result_accepted,
+        device_model, os_version,
+        image_url, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
+      RETURNING *
+    `;
+
+  const params = [
+    userId,
+    s.localId,
+    s.location?.latitude,
+    s.location?.longitude,
+    s.location?.accuracy,
+    s.imageMetadata?.resolution,
+    s.imageMetadata?.orientation,
+    s.diagnosis?.modelPrediction,
+    s.diagnosis?.confidence,
+    s.growthStage,
+    s.plantAge,
+    s.diagnosis?.severity,
+    s.diagnosis?.userVerified,
+    s.diagnosis?.finalDiagnosis,
+    s.environment?.weather,
+    s.environment?.weedPresence,
+    s.environment?.leafhopperObserved,
+    s.appUsage?.retries,
+    s.appUsage?.timeSpentSeconds,
+    s.appUsage?.resultAccepted,
+    s.deviceInfo?.deviceModel,
+    s.deviceInfo?.osVersion,
+    s.imageUrl,
+  ];
+
+  const { source, logitsJson, scoresJson } = predictionExtrasFromBody(s);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const scanRes = await client.query(scanSql, params);
+    if (conflict === 'nothing' && scanRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { scanRow: null, skippedDuplicate: true };
+    }
+    const scanRow = scanRes.rows[0];
+    const scanId = scanRow.id;
+
+    const predRes = await client.query(
+      `
+      INSERT INTO predictions (scan_id, model_prediction, confidence, severity, source, logits, scores)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+      RETURNING id
+    `,
+      [
+        scanId,
+        s.diagnosis?.modelPrediction ?? null,
+        s.diagnosis?.confidence ?? null,
+        s.diagnosis?.severity ?? null,
+        source,
+        logitsJson,
+        scoresJson,
+      ]
+    );
+    const predictionId = predRes.rows[0].id;
+
+    await client.query(
+      `
+      INSERT INTO diagnoses (scan_id, prediction_id, final_diagnosis, user_verified)
+      VALUES ($1, $2, $3, $4)
+    `,
+      [scanId, predictionId, s.diagnosis?.finalDiagnosis ?? null, s.diagnosis?.userVerified ?? false]
+    );
+
+    await client.query(
+      `
+      INSERT INTO sync_log (scan_id, user_id, sync_status, error_message)
+      VALUES ($1, $2, $3, $4)
+    `,
+      [scanId, userId, syncLogStatus, null]
+    );
+
+    await client.query('COMMIT');
+    return { scanRow, skippedDuplicate: false };
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // @route   POST api/scans/upload-image
 router.post('/upload-image', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ msg: 'No file uploaded.' });
@@ -83,33 +220,8 @@ router.post('/upload-image-web', async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const s = req.body;
-    const query = `
-      INSERT INTO scans (
-        user_id, local_id, latitude, longitude, accuracy, 
-        resolution, orientation,
-        model_prediction, confidence, growth_stage, plant_age,
-        severity, user_verified, final_diagnosis,
-        weather, weed_presence, leafhopper_observed,
-        retries, time_spent_seconds, result_accepted,
-        device_model, os_version,
-        image_url, synced_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
-      RETURNING *
-    `;
-    
-    const params = [
-      req.user.id, s.localId, s.location?.latitude, s.location?.longitude, s.location?.accuracy,
-      s.imageMetadata?.resolution, s.imageMetadata?.orientation,
-      s.diagnosis?.modelPrediction, s.diagnosis?.confidence, s.growthStage, s.plantAge,
-      s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
-      s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
-      s.appUsage?.retries, s.appUsage?.timeSpentSeconds, s.appUsage?.resultAccepted,
-      s.deviceInfo?.deviceModel, s.deviceInfo?.osVersion,
-      s.imageUrl
-    ];
-
-    const result = await db.query(query, params);
-    res.json(result.rows[0]);
+    const { scanRow } = await insertScanWithRelatedTables(req.user.id, s, 'received');
+    res.json(scanRow);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -130,37 +242,16 @@ router.post('/sync', auth, async (req, res) => {
 
     for (const s of scans) {
       try {
-        const query = `
-          INSERT INTO scans (
-            user_id, local_id, latitude, longitude, accuracy, 
-            resolution, orientation,
-            model_prediction, confidence, growth_stage, plant_age,
-            severity, user_verified, final_diagnosis,
-            weather, weed_presence, leafhopper_observed,
-            retries, time_spent_seconds, result_accepted,
-            device_model, os_version,
-            image_url, synced_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
-          ON CONFLICT (local_id) DO NOTHING
-          RETURNING local_id
-        `;
-        
-        const params = [
-          req.user.id, s.localId, s.location?.latitude, s.location?.longitude, s.location?.accuracy,
-          s.imageMetadata?.resolution, s.imageMetadata?.orientation,
-          s.diagnosis?.modelPrediction, s.diagnosis?.confidence, s.growthStage, s.plantAge,
-          s.diagnosis?.severity, s.diagnosis?.userVerified, s.diagnosis?.finalDiagnosis,
-          s.environment?.weather, s.environment?.weedPresence, s.environment?.leafhopperObserved,
-          s.appUsage?.retries, s.appUsage?.timeSpentSeconds, s.appUsage?.resultAccepted,
-          s.deviceInfo?.deviceModel, s.deviceInfo?.osVersion,
-          s.imageUrl
-        ];
-
-        const result = await db.query(query, params);
-        if (result.rows.length > 0) {
-          insertedLocalIds.push(String(result.rows[0].local_id));
-        } else {
+        const { scanRow, skippedDuplicate } = await insertScanWithRelatedTables(
+          req.user.id,
+          s,
+          'synced',
+          { conflict: 'nothing' }
+        );
+        if (skippedDuplicate) {
           skippedDuplicates.push(String(s.localId));
+        } else {
+          insertedLocalIds.push(String(scanRow.local_id));
         }
       } catch (err) {
         console.error(`Sync error for ${s.localId}:`, err.message);

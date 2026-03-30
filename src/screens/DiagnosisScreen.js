@@ -487,7 +487,10 @@ const DiagnosisScreen = ({ navigation }) => {
                 confidence: parseFloat(invalidResult.confidence),
                 severity: invalidResult.severity,
                 userVerified: true,
-                finalDiagnosis: invalidResult.diagnosis
+                finalDiagnosis: invalidResult.diagnosis,
+                predictionSource: invalidResult.source,
+                logits: Array.isArray(invalidResult.logits) ? invalidResult.logits : undefined,
+                scores: Array.isArray(invalidResult.scores) ? invalidResult.scores : undefined,
               },
               appUsage: {
                 retries,
@@ -607,7 +610,10 @@ const DiagnosisScreen = ({ navigation }) => {
               confidence: parseFloat(diagnosisResult.confidence),
               severity: diagnosisResult.severity,
               userVerified: true,
-              finalDiagnosis: diagnosisResult.diagnosis
+              finalDiagnosis: diagnosisResult.diagnosis,
+              predictionSource: diagnosisResult.source,
+              logits: Array.isArray(diagnosisResult.logits) ? diagnosisResult.logits : undefined,
+              scores: Array.isArray(diagnosisResult.scores) ? diagnosisResult.scores : undefined,
             },
             appUsage: {
               retries: diagnosisResult.retries,
@@ -665,7 +671,10 @@ const DiagnosisScreen = ({ navigation }) => {
           confidence: parseFloat(result.confidence),
           severity: finalSeverity,
           userVerified: true,
-          finalDiagnosis: finalDiagnosis
+          finalDiagnosis: finalDiagnosis,
+          predictionSource: result.source,
+          logits: Array.isArray(result.logits) ? result.logits : undefined,
+          scores: Array.isArray(result.scores) ? result.scores : undefined,
         },
         appUsage: {
           retries: Number(result.retries) || 0,

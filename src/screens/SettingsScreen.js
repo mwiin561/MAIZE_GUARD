@@ -89,7 +89,10 @@ const SettingsScreen = ({ navigation }) => {
               confidence: parseFloat(item.confidence || 0),
               severity: item.severity || 'Unknown',
               userVerified: true,
-              finalDiagnosis: item.diagnosis
+              finalDiagnosis: item.diagnosis,
+              predictionSource: item.source,
+              logits: Array.isArray(item.logits) ? item.logits : undefined,
+              scores: Array.isArray(item.scores) ? item.scores : undefined,
             },
             appUsage: {
               retries: Number(item.retries) || 0,
