@@ -87,6 +87,7 @@ const SettingsScreen = ({ navigation }) => {
             diagnosis: {
               modelPrediction: item.diagnosis,
               confidence: parseFloat(item.confidence || 0),
+              severity: item.severity || 'Unknown',
               userVerified: true,
               finalDiagnosis: item.diagnosis
             },

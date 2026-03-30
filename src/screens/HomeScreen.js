@@ -93,6 +93,7 @@ const HomeScreen = ({ navigation }) => {
                 diagnosis: {
                   modelPrediction: item.diagnosis, // Assuming diagnosis holds the final label
                   confidence: parseFloat(item.confidence),
+                  severity: item.severity || 'Unknown',
                   userVerified: true,
                   finalDiagnosis: item.diagnosis
                 },

@@ -90,6 +90,14 @@ function imageMetaFromDimensions(width, height) {
   return { resolution: `${Math.round(w)}x${Math.round(h)}`, orientation };
 }
 
+function severityFromDiagnosis(label, fallbackStage = 'Unknown') {
+  const value = String(label || '').toLowerCase();
+  if (value.includes('healthy')) return 'Healthy';
+  if (value.includes('maize streak') || value === 'msv') return fallbackStage || 'Unknown';
+  if (value.includes('not a maize')) return 'Not a Maize Leaf';
+  return fallbackStage || 'Unknown';
+}
+
 const DiagnosisScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [image, setImage] = useState(null);
@@ -354,7 +362,8 @@ const DiagnosisScreen = ({ navigation }) => {
           logits: analysisResult.logits,
           scores: analysisResult.scores,
           title: invalidTitle,
-          diagnosis: isBackendAiMock ? 'Service Error' : 'Invalid Scan',
+          diagnosis: isBackendAiMock ? 'Service Error' : 'Not a Maize Leaf',
+          severity: isBackendAiMock ? 'Unknown' : 'Not a Maize Leaf',
           confidence: confidence,
           description: isBackendAiMock
             ? 'The cloud AI service could not run this scan (often the Python model worker is not reachable from the backend). On-device ONNX should still work when the model loads; check debug logs. Try again later or use a dev build with a working AI backend.'
@@ -419,6 +428,7 @@ const DiagnosisScreen = ({ navigation }) => {
               diagnosis: {
                 modelPrediction: invalidResult.diagnosis,
                 confidence: parseFloat(invalidResult.confidence),
+                severity: invalidResult.severity,
                 userVerified: true,
                 finalDiagnosis: invalidResult.diagnosis
               },
@@ -466,6 +476,7 @@ const DiagnosisScreen = ({ navigation }) => {
         title: isMsv ? 'MSV Detected' : 'Healthy Maize Plant',
         diagnosis: serverDiagnosis || (isInfected ? 'Maize Streak Virus' : 'Healthy'),
         diseaseStage: diseaseStage, // Save the stage
+        severity: isMsv ? diseaseStage : 'Healthy',
         confidence: confidence,
         description: baseDescription,
         debugDescription,
@@ -523,6 +534,7 @@ const DiagnosisScreen = ({ navigation }) => {
             diagnosis: {
               modelPrediction: diagnosisResult.diagnosis, 
               confidence: parseFloat(diagnosisResult.confidence),
+              severity: diagnosisResult.severity,
               userVerified: true,
               finalDiagnosis: diagnosisResult.diagnosis
             },
@@ -552,6 +564,9 @@ const DiagnosisScreen = ({ navigation }) => {
         imageMeta || { resolution: 'Unknown', orientation: 'Portrait' };
 
       const finalDiagnosis = isCorrect ? result.diagnosis : correctedLabel;
+      const finalSeverity = isCorrect
+        ? (result.severity || severityFromDiagnosis(result.diagnosis, result.diseaseStage))
+        : severityFromDiagnosis(finalDiagnosis, result.diseaseStage);
       
       // Create full scan record for backend
       const scanData = {
@@ -567,6 +582,7 @@ const DiagnosisScreen = ({ navigation }) => {
         diagnosis: {
           modelPrediction: result.diagnosis,
           confidence: parseFloat(result.confidence),
+          severity: finalSeverity,
           userVerified: true,
           finalDiagnosis: finalDiagnosis
         },
@@ -577,6 +593,7 @@ const DiagnosisScreen = ({ navigation }) => {
       const historyItem = {
         ...result,
         diagnosis: finalDiagnosis,
+        severity: finalSeverity,
         userVerified: true,
         location: location ? {
             latitude: location.coords.latitude,
