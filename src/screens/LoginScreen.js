@@ -5,6 +5,9 @@ import { AuthContext } from '../context/AuthContext';
 
 const PLANT_BG_URL = 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1200&q=80';
 
+/** Placeholder text (Android/iOS need explicit color; default can look white on light fields). */
+const PLACEHOLDER_TEXT_COLOR = '#000000';
+
 const LoginScreen = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,10 +37,6 @@ const LoginScreen = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    googleLogin();
-  };
-
   return (
     <ImageBackground source={{ uri: PLANT_BG_URL }} style={styles.background} resizeMode="cover">
       <SafeAreaView style={styles.container}>
@@ -62,18 +61,21 @@ const LoginScreen = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="Full Name"
+                  placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                   value={name}
                   onChangeText={setName}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Region (Optional)"
+                  placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                   value={region}
                   onChangeText={setRegion}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Farm Size in Acres (Optional)"
+                  placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                   value={farmSize}
                   onChangeText={setFarmSize}
                   keyboardType="numeric"
@@ -83,6 +85,7 @@ const LoginScreen = () => {
             <TextInput
               style={styles.input}
               placeholder="Email"
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -91,6 +94,7 @@ const LoginScreen = () => {
             <TextInput
               style={styles.input}
               placeholder="Password"
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
